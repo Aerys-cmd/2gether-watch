@@ -1,0 +1,53 @@
+using System.Net.WebSockets;
+using System.Text;
+using _2gether_watch;
+
+
+var builder = WebApplication.CreateBuilder(args);
+
+
+// Add services to the container.
+builder.Services.AddRazorPages();
+
+builder.Services.AddSingleton<RoomManager>();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (!app.Environment.IsDevelopment())
+{
+    app.UseExceptionHandler("/Error");
+    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+    app.UseHsts();
+}
+
+app.UseHttpsRedirection();
+
+app.UseWebSockets();
+
+app.UseRouting();
+
+app.UseAuthorization();
+
+app.MapStaticAssets();
+
+app.MapRazorPages()
+    .WithStaticAssets();
+
+
+app.Map("/ws", async context =>
+{
+    if (context.WebSockets.IsWebSocketRequest)
+    {
+        var roomManager = context.RequestServices.GetRequiredService<RoomManager>();
+        using var webSocket = await context.WebSockets.AcceptWebSocketAsync();
+        await roomManager.HandleConnectionAsync(webSocket);
+    }
+    else
+    {
+        context.Response.StatusCode = 400;
+    }
+});
+
+app.Run();
+

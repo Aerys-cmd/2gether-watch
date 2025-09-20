@@ -1,0 +1,43 @@
+## Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio
+.vs/
+*.user
+*.suo
+
+## Rider / JetBrains
+.idea/
+*.sln.iml
+
+## Paketler
+*.nupkg
+*.snupkg
+*.nuspec
+
+## NuGet
+*.nupkg
+*.snupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+packages/
+*.nuget.props
+*.nuget.targets
+
+## Diğer
+*.dll
+*.exe
+*.db
+*.pdb
+*.cache
+*.config
+*.log
+*.vspscc
+*.vssscc
+
+# Publish output
+publish/
