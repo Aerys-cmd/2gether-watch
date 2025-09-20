@@ -43,7 +43,7 @@ jobs:
             ssh-add ~/.ssh/github_rsa
             
             # Clone the repository and checkout the specific branch
-            git clone git@github.com:LunavexSoftware/Lunavex.Applications.git
+            git clone git@github.com:aerys-cmd/2gether-watch.git
             cd 2gether-watch/2gether-watch
 
             docker build -t 2gether-watch:latest .
