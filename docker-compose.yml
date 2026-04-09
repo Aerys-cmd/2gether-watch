@@ -1,6 +1,6 @@
 services:
   2gether-watch:
-    image: ghcr.io/aerys-cmd/2gether-watch:latest
+    image: ghcr.io/aerys-cmd/2gether-watch:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       - ASPNETCORE_URLS=http://+:8080

@@ -19,7 +19,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          global-json-file: global.json
 
       - name: Restore dependencies
         run: dotnet restore
@@ -27,5 +27,5 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
-        run: dotnet test --no-build --configuration Release
+      - name: Skip tests (no test projects yet)
+        run: echo "No .NET test projects are present yet; CI currently performs restore and build only."
