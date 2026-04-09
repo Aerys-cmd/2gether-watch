@@ -64,13 +64,22 @@
             window.location.href = "/room/" + generateRoomId();
         });
 
+        const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+
         document.getElementById("btnJoin").addEventListener("click", () => {
             const id = document.getElementById("roomIdInput").value.trim();
+            const errMsg = document.getElementById("errMsg");
             if (!id) {
-                document.getElementById("errMsg").classList.remove("hidden");
+                errMsg.textContent = "Please enter a room ID.";
+                errMsg.classList.remove("hidden");
                 return;
             }
-            window.location.href = "/room/" + encodeURIComponent(id);
+            if (!ROOM_ID_PATTERN.test(id)) {
+                errMsg.textContent = "Room ID may only contain letters, numbers, hyphens and underscores.";
+                errMsg.classList.remove("hidden");
+                return;
+            }
+            window.location.href = "/room/" + id;
         });
 
         document.getElementById("roomIdInput").addEventListener("keydown", e => {

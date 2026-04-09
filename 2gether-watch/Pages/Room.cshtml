@@ -1,4 +1,4 @@
-@page "/room/{id}"
+@page "/room/{id?}"
 @model RoomModel
 @{
     Layout = null;
@@ -60,12 +60,37 @@
 
     <script>
         // Copy room link
-        document.getElementById("btnCopyLink").addEventListener("click", () => {
-            navigator.clipboard.writeText(location.href).then(() => {
-                const btn = document.getElementById("btnCopyLink");
-                btn.textContent = "✅";
-                setTimeout(() => { btn.textContent = "📋"; }, 1500);
-            });
+        const copyLinkButton = document.getElementById("btnCopyLink");
+
+        function setCopyButtonState(icon) {
+            copyLinkButton.textContent = icon;
+            setTimeout(() => { copyLinkButton.textContent = "📋"; }, 1500);
+        }
+
+        function fallbackCopyText(text) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.setAttribute("readonly", "");
+            textArea.style.position = "fixed";
+            textArea.style.opacity = "0";
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                return document.execCommand("copy");
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        copyLinkButton.addEventListener("click", () => {
+            const textToCopy = location.href;
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => setCopyButtonState("✅"))
+                    .catch(() => setCopyButtonState(fallbackCopyText(textToCopy) ? "✅" : "❌"));
+            } else {
+                setCopyButtonState(fallbackCopyText(textToCopy) ? "✅" : "❌");
+            }
         });
 
         // Screen placeholder: hide when remote screen has a source

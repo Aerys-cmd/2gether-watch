@@ -66,6 +66,8 @@ public class RoomManager
         }
     }
 
+    private const int MaxMessageBytes = 64 * 1024; // 64 KB
+
     private static async Task<string?> ReceiveFullMessageAsync(WebSocket socket, byte[] buffer)
     {
         using var ms = new MemoryStream();
@@ -74,6 +76,16 @@ public class RoomManager
         {
             result = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
             if (result.MessageType == WebSocketMessageType.Close) return null;
+
+            if (ms.Length + result.Count > MaxMessageBytes)
+            {
+                await socket.CloseAsync(
+                    WebSocketCloseStatus.MessageTooBig,
+                    "Message exceeds maximum allowed size.",
+                    CancellationToken.None);
+                return null;
+            }
+
             ms.Write(buffer, 0, result.Count);
         } while (!result.EndOfMessage);
 

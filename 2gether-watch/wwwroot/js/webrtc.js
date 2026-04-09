@@ -66,7 +66,7 @@ ws.onmessage = async (event) => {
         await pc.setRemoteDescription(new RTCSessionDescription(msg));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify(answer));
+        wsSend(JSON.stringify(answer));
     } else if (msg.type === "answer") {
         await pc.setRemoteDescription(new RTCSessionDescription(msg));
     } else if (msg.type === "candidate") {
@@ -87,7 +87,7 @@ ws.onmessage = async (event) => {
 // --- ICE candidates ---
 pc.onicecandidate = (event) => {
     if (event.candidate) {
-        ws.send(JSON.stringify({ type: "candidate", candidate: event.candidate }));
+        wsSend(JSON.stringify({ type: "candidate", candidate: event.candidate }));
     }
 };
 
@@ -106,11 +106,17 @@ pc.ontrack = (event) => {
     nextIncomingStreamKind = null;
 };
 
+function wsSend(data) {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+    }
+}
+
 // --- Renegotiate (send new offer with current tracks) ---
 async function renegotiate() {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    ws.send(JSON.stringify(offer));
+    wsSend(JSON.stringify(offer));
 }
 
 // --- Toggle Camera + Mic ---
@@ -121,7 +127,7 @@ async function startCamera() {
             .filter(s => s.track && localStream.getTracks().includes(s.track))
             .forEach(s => pc.removeTrack(s));
 
-        ws.send(JSON.stringify({ type: "camera-off" }));
+        wsSend(JSON.stringify({ type: "camera-off" }));
         document.getElementById("localCam").srcObject = null;
         document.getElementById("btnCam").textContent = "🎥 Camera";
         localStream = null;
@@ -133,7 +139,7 @@ async function startCamera() {
 
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-    ws.send(JSON.stringify({ type: "metadata", kind: "camera" }));
+    wsSend(JSON.stringify({ type: "metadata", kind: "camera" }));
     await renegotiate();
 
     document.getElementById("btnCam").textContent = "🎥 Stop Camera";
@@ -149,7 +155,7 @@ async function startScreenShare() {
     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
     screenStream.getTracks().forEach(track => pc.addTrack(track, screenStream));
 
-    ws.send(JSON.stringify({ type: "metadata", kind: "screen" }));
+    wsSend(JSON.stringify({ type: "metadata", kind: "screen" }));
     await renegotiate();
 
     document.getElementById("btnShare").textContent = "🖥️ Stop Share";
@@ -169,7 +175,7 @@ function stopScreenShare() {
         .filter(s => s.track && screenStream.getTracks().includes(s.track))
         .forEach(s => pc.removeTrack(s));
 
-    ws.send(JSON.stringify({ type: "screen-off" }));
+    wsSend(JSON.stringify({ type: "screen-off" }));
     screenStream = null;
     document.getElementById("btnShare").textContent = "🖥️ Share";
 }
