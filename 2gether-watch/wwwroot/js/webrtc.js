@@ -155,7 +155,10 @@ async function startScreenShare() {
     document.getElementById("btnShare").textContent = "🖥️ Stop Share";
 
     // Clean up when the user stops sharing via the browser's native UI
-    screenStream.getVideoTracks()[0].addEventListener("ended", () => stopScreenShare());
+    const videoTrack = screenStream.getVideoTracks()[0];
+    if (videoTrack) {
+        videoTrack.addEventListener("ended", () => stopScreenShare());
+    }
 }
 
 function stopScreenShare() {
