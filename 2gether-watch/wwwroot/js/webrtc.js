@@ -152,14 +152,7 @@ function toggleMic() {
 // --- Start/Stop Screen Share ---
 async function startScreenShare() {
     if (screenStream) {
-        screenStream.getTracks().forEach(t => t.stop());
-        pc.getSenders()
-            .filter(s => s.track && screenStream.getTracks().includes(s.track))
-            .forEach(s => pc.removeTrack(s));
-
-        ws.send(JSON.stringify({ type: "screen-off" }));
-        document.getElementById("btnShare").textContent = "🖥️";
-        screenStream = null;
+        await stopScreenShare();
         return;
     }
 
@@ -181,7 +174,20 @@ async function startScreenShare() {
     document.getElementById("btnShare").textContent = "🖥️❌";
 
     // Handle user stopping via the browser's native stop button
-    screenStream.getVideoTracks()[0].onended = () => startScreenShare();
+    screenStream.getVideoTracks()[0].onended = stopScreenShare;
+}
+
+async function stopScreenShare() {
+    if (!screenStream) return;
+
+    screenStream.getTracks().forEach(t => t.stop());
+    pc.getSenders()
+        .filter(s => s.track && screenStream.getTracks().includes(s.track))
+        .forEach(s => pc.removeTrack(s));
+
+    ws.send(JSON.stringify({ type: "screen-off" }));
+    document.getElementById("btnShare").textContent = "🖥️";
+    screenStream = null;
 }
 
 // --- Copy room link ---

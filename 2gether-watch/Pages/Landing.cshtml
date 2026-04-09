@@ -55,7 +55,8 @@
 
     <script>
         function generateRoomId() {
-            return Math.random().toString(36).slice(2, 8).toUpperCase();
+            // Use crypto.randomUUID for secure, collision-resistant room IDs
+            return crypto.randomUUID().replace(/-/g, "").slice(0, 8).toUpperCase();
         }
 
         document.getElementById("btnCreate").onclick = () => {
