@@ -1,0 +1,75 @@
+@page "/"
+@model _2gether_watch.Pages.LandingModel
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2gether Watch</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center px-4">
+
+    <div class="max-w-md w-full text-center">
+        <!-- Hero -->
+        <div class="mb-10">
+            <h1 class="text-5xl font-bold tracking-tight mb-3">2gether Watch</h1>
+            <p class="text-gray-400 text-lg leading-relaxed">
+                Watch anything with anyone, in real time.<br />
+                Share your screen and webcam with a single link.
+            </p>
+        </div>
+
+        <!-- Card -->
+        <div class="bg-gray-800 rounded-2xl p-8 shadow-2xl space-y-6">
+
+            <!-- Create Room -->
+            <button id="btnCreate"
+                class="w-full py-3 bg-purple-600 hover:bg-purple-700 active:scale-95 rounded-xl font-semibold text-lg transition-all">
+                ✨ Create a New Room
+            </button>
+
+            <div class="flex items-center gap-3 text-gray-500 text-sm">
+                <div class="flex-1 h-px bg-gray-700"></div>
+                <span>or join an existing room</span>
+                <div class="flex-1 h-px bg-gray-700"></div>
+            </div>
+
+            <!-- Join Room -->
+            <div class="flex gap-2">
+                <input id="roomInput" type="text" placeholder="Enter Room ID"
+                    class="flex-1 px-4 py-3 bg-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-purple-500 text-white placeholder-gray-500 uppercase tracking-widest" />
+                <button id="btnJoin"
+                    class="px-5 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl font-semibold transition-all">
+                    Join
+                </button>
+            </div>
+        </div>
+
+        <p class="mt-8 text-gray-600 text-sm">No account needed &mdash; just share the link.</p>
+    </div>
+
+    <script>
+        function generateRoomId() {
+            return Math.random().toString(36).slice(2, 8).toUpperCase();
+        }
+
+        document.getElementById("btnCreate").onclick = () => {
+            window.location.href = `/room/${generateRoomId()}`;
+        };
+
+        document.getElementById("btnJoin").onclick = () => {
+            const id = document.getElementById("roomInput").value.trim();
+            if (id) window.location.href = `/room/${encodeURIComponent(id)}`;
+        };
+
+        document.getElementById("roomInput").addEventListener("keydown", e => {
+            if (e.key === "Enter") document.getElementById("btnJoin").click();
+        });
+    </script>
+</body>
+</html>
