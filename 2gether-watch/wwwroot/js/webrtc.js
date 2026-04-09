@@ -2,74 +2,84 @@ let pc = new RTCPeerConnection({
     iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
 });
 
-let localStream;
-let screenStream;
+let localStream = null;
+let screenStream = null;
 
-let ws = location.protocol === "https:" ? new WebSocket(`wss://${location.host}/ws`) : new WebSocket(`ws://${location.host}/ws`);
+const wsUrl = location.protocol === "https:"
+    ? `wss://${location.host}/ws`
+    : `ws://${location.host}/ws`;
 
-let nextIncomingStreamKind = null; // helper for classifying remote streams
+let ws = new WebSocket(wsUrl);
+
+let nextIncomingStreamKind = null; // classifies the next incoming remote track
+
+function updateStatus(text) {
+    const el = document.getElementById("statusText");
+    if (el) el.textContent = text;
+}
 
 // --- WebSocket Handling ---
 ws.onopen = () => {
     ws.send("join:" + ROOM_ID);
 };
 
+ws.onclose = () => {
+    updateStatus("Disconnected from server.");
+};
+
+ws.onerror = (err) => {
+    console.error("WebSocket error:", err);
+    updateStatus("Connection error. Please reload.");
+};
+
 ws.onmessage = async (event) => {
+    const raw = event.data;
 
-    let msg = event.data;
+    if (raw.startsWith("join:")) {
+        updateStatus("The other person joined!");
 
-    if (msg.startsWith("join:")) {
-        document.getElementById("roomVacantText").textContent = "Odaya birisi katıldı";
-
-        if (localStream) {
-            await startCamera();
-            await startCamera();
-        }
-        console.log("join:", msg);
-        if (screenStream) {
-            await startScreenShare();
-            await startScreenShare();
+        // Renegotiate so the new peer receives any active streams
+        if (localStream || screenStream) {
+            await renegotiate();
         }
         return;
     }
 
-    if (msg.startsWith("leave:")) {
+    if (raw.startsWith("leave:")) {
         document.getElementById("remoteCam").srcObject = null;
         document.getElementById("remoteScreen").srcObject = null;
-        document.getElementById("roomVacantText").textContent = "Diğer kullanıcı odadan ayrıldı";
+        updateStatus("The other person left the room.");
         return;
     }
 
-    msg = null;
+    let msg;
     try {
-        msg = JSON.parse(event.data);
-    }
-    catch (error) {
-        console.error(error);
+        msg = JSON.parse(raw);
+    } catch (e) {
+        console.error("Failed to parse WebSocket message:", e);
+        return;
     }
 
+    if (!msg || !msg.type) return;
 
     if (msg.type === "offer") {
         await pc.setRemoteDescription(new RTCSessionDescription(msg));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        ws.send(JSON.stringify(answer));
+        wsSend(JSON.stringify(answer));
     } else if (msg.type === "answer") {
         await pc.setRemoteDescription(new RTCSessionDescription(msg));
     } else if (msg.type === "candidate") {
         try {
             await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
         } catch (e) {
-            console.error("Error adding candidate:", e);
+            console.error("Error adding ICE candidate:", e);
         }
     } else if (msg.type === "metadata") {
-        // 👈 mark next incoming stream
         nextIncomingStreamKind = msg.kind;
-    }
-    else if (msg.type === "camera-off") {
+    } else if (msg.type === "camera-off") {
         document.getElementById("remoteCam").srcObject = null;
-    }
-    else if (msg.type === "screen-off") {
+    } else if (msg.type === "screen-off") {
         document.getElementById("remoteScreen").srcObject = null;
     }
 };
@@ -77,48 +87,49 @@ ws.onmessage = async (event) => {
 // --- ICE candidates ---
 pc.onicecandidate = (event) => {
     if (event.candidate) {
-        ws.send(JSON.stringify({ type: "candidate", candidate: event.candidate }));
+        wsSend(JSON.stringify({ type: "candidate", candidate: event.candidate }));
     }
 };
 
 // --- Remote Tracks ---
 pc.ontrack = (event) => {
     const stream = event.streams[0];
-    console.log(stream)
-
-    console.log(nextIncomingStreamKind, 'nextIncomingStreamKind')
 
     if (nextIncomingStreamKind === "screen") {
         document.getElementById("remoteScreen").srcObject = stream;
         document.getElementById("remoteScreen").muted = false;
-    } else if (nextIncomingStreamKind === "camera") {
-        document.getElementById("remoteCam").srcObject = stream;
     } else {
-        // fallback: assume camera
+        // "camera" or unknown — treat as camera
         document.getElementById("remoteCam").srcObject = stream;
     }
 
-    console.log(document.getElementById("remoteCam").srcObject)
+    nextIncomingStreamKind = null;
 };
 
-// --- Start Camera + Mic ---
+function wsSend(data) {
+    if (ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+    }
+}
+
+// --- Renegotiate (send new offer with current tracks) ---
+async function renegotiate() {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    wsSend(JSON.stringify(offer));
+}
+
+// --- Toggle Camera + Mic ---
 async function startCamera() {
-
     if (localStream) {
-        localStream.getTracks().forEach(track => {
-            track.stop();
-        });
+        localStream.getTracks().forEach(track => track.stop());
+        pc.getSenders()
+            .filter(s => s.track && localStream.getTracks().includes(s.track))
+            .forEach(s => pc.removeTrack(s));
 
-        pc.getSenders().forEach(sender => {
-            if (sender.track && localStream.getTracks().includes(sender.track)) {
-                pc.removeTrack(sender); // detach from peer
-            }
-        });
-
-        ws.send(JSON.stringify({ type: "camera-off" }));
-
+        wsSend(JSON.stringify({ type: "camera-off" }));
         document.getElementById("localCam").srcObject = null;
-        document.getElementById("btnCam").textContent = "🎥";
+        document.getElementById("btnCam").textContent = "🎥 Camera";
         localStream = null;
         return;
     }
@@ -126,62 +137,50 @@ async function startCamera() {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     document.getElementById("localCam").srcObject = localStream;
 
-    localStream.getTracks().forEach(track => {
-        pc.addTrack(track, localStream);
-    });
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-    // tell remote this is a camera stream
-    ws.send(JSON.stringify({ type: "metadata", kind: "camera" }));
+    wsSend(JSON.stringify({ type: "metadata", kind: "camera" }));
+    await renegotiate();
 
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    ws.send(JSON.stringify(offer));
-    document.getElementById("btnCam").textContent = "🎥❌";
+    document.getElementById("btnCam").textContent = "🎥 Stop Camera";
 }
 
+// --- Toggle Screen Share ---
 async function startScreenShare() {
-
     if (screenStream) {
-        screenStream.getTracks().forEach(track => {
-            track.stop();
-        });
-
-        pc.getSenders().forEach(sender => {
-            if (sender.track && screenStream.getTracks().includes(sender.track)) {
-                pc.removeTrack(sender); // detach from peer
-            }
-        });
-
-        document.getElementById("remoteScreen").srcObject = null;
-        document.getElementById("btnShare").textContent = "🖥️";
-
-        ws.send(JSON.stringify({ type: "screen-off" }));
-        screenStream = null;
-
+        stopScreenShare();
         return;
     }
 
-
     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    screenStream.getTracks().forEach(track => pc.addTrack(track, screenStream));
 
-    screenStream.getTracks().forEach(track => {
-        pc.addTrack(track, screenStream);
-    });
+    wsSend(JSON.stringify({ type: "metadata", kind: "screen" }));
+    await renegotiate();
 
-    document.getElementById("remoteScreen").srcObject = screenStream;
-    document.getElementById("remoteScreen").muted = true;
+    document.getElementById("btnShare").textContent = "🖥️ Stop Share";
 
-    // tell remote this is a screen stream
-    ws.send(JSON.stringify({ type: "metadata", kind: "screen" }));
+    // Clean up when the user stops sharing via the browser's native UI
+    const videoTrack = screenStream.getVideoTracks()[0];
+    if (videoTrack) {
+        videoTrack.addEventListener("ended", () => stopScreenShare());
+    }
+}
 
-    // renegotiate
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    ws.send(JSON.stringify(offer));
+function stopScreenShare() {
+    if (!screenStream) return;
 
-    document.getElementById("btnShare").textContent = "🖥️❌";
+    screenStream.getTracks().forEach(track => track.stop());
+    pc.getSenders()
+        .filter(s => s.track && screenStream.getTracks().includes(s.track))
+        .forEach(s => pc.removeTrack(s));
+
+    wsSend(JSON.stringify({ type: "screen-off" }));
+    screenStream = null;
+    document.getElementById("btnShare").textContent = "🖥️ Share";
 }
 
 // --- Controls ---
-document.getElementById("btnCam").onclick = () => startCamera();
-document.getElementById("btnShare").onclick = () => startScreenShare();
+document.getElementById("btnCam").addEventListener("click", () => startCamera());
+document.getElementById("btnShare").addEventListener("click", () => startScreenShare());
+
