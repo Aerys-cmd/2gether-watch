@@ -1,0 +1,97 @@
+@page "/room/{id}"
+@model RoomModel
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2gether Watch — Room @Model.RoomId</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="h-screen w-screen bg-gray-900 text-white overflow-hidden">
+    <div class="flex flex-col sm:flex-row h-full">
+        <!-- Left: Screen Share -->
+        <div class="relative flex-1 flex bg-black items-center justify-center">
+            <video id="remoteScreen" autoplay playsinline class="w-full h-full object-contain"></video>
+            <div id="screenPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 pointer-events-none select-none">
+                <span class="text-6xl mb-4">🖥️</span>
+                <span class="text-lg">No screen share active</span>
+            </div>
+        </div>
+
+        <!-- Right: Webcams + Info -->
+        <div class="w-full flex flex-col bg-gray-800 p-2 space-y-2 sm:w-72">
+            <!-- Room info -->
+            <div class="flex items-center justify-between px-2 py-1 bg-gray-700 rounded-lg text-sm">
+                <span class="text-gray-400 truncate">
+                    Room: <span class="text-white font-mono">@Model.RoomId</span>
+                </span>
+                <button id="btnCopyLink" class="ml-2 p-1 hover:bg-gray-600 rounded transition" title="Copy room link">📋</button>
+            </div>
+
+            <!-- Connection status -->
+            <div id="statusText" class="text-center text-sm text-yellow-400 px-2">Waiting for the other person…</div>
+
+            <!-- Remote cam -->
+            <video id="remoteCam" autoplay playsinline class="w-full flex-1 object-cover rounded-lg bg-gray-900 min-h-0"></video>
+
+            <!-- Local cam (mirrored) -->
+            <video id="localCam" autoplay playsinline muted class="w-full flex-1 -scale-x-100 object-cover rounded-lg bg-gray-900 min-h-0"></video>
+        </div>
+    </div>
+
+    <!-- Floating Controls -->
+    <div id="controls" class="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-3 transition-opacity duration-300">
+        <button id="btnCam" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-full font-medium shadow-lg transition">🎥 Camera</button>
+        <button id="btnShare" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-full font-medium shadow-lg transition">🖥️ Share</button>
+        <a href="/" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-full font-medium shadow-lg transition cursor-pointer">🚪 Leave</a>
+    </div>
+
+    <script>
+        const ROOM_ID = "@Model.RoomId";
+    </script>
+    <script src="/js/webrtc.js"></script>
+
+    <script>
+        // Copy room link
+        document.getElementById("btnCopyLink").addEventListener("click", () => {
+            navigator.clipboard.writeText(location.href).then(() => {
+                const btn = document.getElementById("btnCopyLink");
+                btn.textContent = "✅";
+                setTimeout(() => { btn.textContent = "📋"; }, 1500);
+            });
+        });
+
+        // Screen placeholder: hide when remote screen has a source
+        const remoteScreenEl = document.getElementById("remoteScreen");
+        const placeholderEl = document.getElementById("screenPlaceholder");
+
+        function syncScreenPlaceholder() {
+            placeholderEl.classList.toggle("hidden", !!remoteScreenEl.srcObject);
+        }
+
+        remoteScreenEl.addEventListener("loadedmetadata", syncScreenPlaceholder);
+        // Poll for srcObject changes from webrtc.js (MutationObserver doesn't cover srcObject)
+        setInterval(syncScreenPlaceholder, 500);
+
+        // Hide controls after idle
+        const controlsEl = document.getElementById("controls");
+        let hideTimer;
+        function resetHideTimer() {
+            controlsEl.classList.remove("opacity-0");
+            clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => controlsEl.classList.add("opacity-0"), 3000);
+        }
+        ["mousemove", "keydown", "click", "touchstart"].forEach(evt =>
+            document.addEventListener(evt, resetHideTimer));
+        resetHideTimer();
+    </script>
+</body>
+
+</html>
