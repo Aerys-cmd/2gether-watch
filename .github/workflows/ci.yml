@@ -1,4 +1,4 @@
-name: CI – Build & Push Docker Image
+name: CI – Build & Test
 
 on:
   push:
@@ -6,42 +6,26 @@ on:
   pull_request:
     branches: [main]
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
 jobs:
-  build-and-push:
+  build-and-test:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          dotnet-version: '9.0.x'
 
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=sha,prefix=sha-
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+      - name: Restore dependencies
+        run: dotnet restore
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: 2gether-watch/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release
