@@ -1,0 +1,19 @@
+services:
+  2gether-watch:
+    image: ghcr.io/aerys-cmd/2gether-watch:latest
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+    networks:
+      - web
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.2gether-watch.rule=Host(`2gether-watch.lunavex.com`)"
+      - "traefik.http.routers.2gether-watch.entrypoints=websecure"
+      - "traefik.http.routers.2gether-watch.tls.certresolver=letsencrypt"
+      - "traefik.http.services.2gether-watch.loadbalancer.server.port=8080"
+
+networks:
+  web:
+    external: true
