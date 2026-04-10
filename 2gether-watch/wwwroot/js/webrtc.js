@@ -369,7 +369,7 @@ function addPeerCamTile(peerId, state) {
 
     const tile = document.createElement("div");
     tile.id = `cam-tile-${peerId}`;
-    tile.className = "relative flex-none bg-slate-800 overflow-hidden cam-tile";
+    tile.className = "relative flex-none bg-slate-800 overflow-hidden cam-tile w-28 lg:w-full shrink-0";
 
     const vid = document.createElement("video");
     vid.autoplay = true;
