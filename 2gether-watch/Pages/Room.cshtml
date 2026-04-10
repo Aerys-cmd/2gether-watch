@@ -13,201 +13,222 @@
     <title>2gether Watch — Room @Model.RoomId</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* True full-height that shrinks with mobile browser chrome */
         body { height: 100dvh; }
+        @@supports not (height: 100dvh) { body { height: 100vh; } }
 
-        @@supports not (height: 100dvh) {
-            body { height: 100vh; }
-        }
-
-        .glass {
-            background: rgba(255,255,255,0.04);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.07);
-        }
-
-        /* Pill label over video */
         .vid-label {
-            position: absolute;
-            bottom: 6px;
-            left: 8px;
-            font-size: 10px;
-            line-height: 1;
-            color: rgba(255,255,255,0.5);
-            background: rgba(0,0,0,0.4);
-            padding: 2px 6px;
-            border-radius: 4px;
-            pointer-events: none;
+            position: absolute; bottom: 6px; left: 8px;
+            font-size: 10px; line-height: 1;
+            color: rgba(255,255,255,0.55); background: rgba(0,0,0,0.45);
+            padding: 2px 6px; border-radius: 4px;
+            pointer-events: none; user-select: none;
         }
 
-        /* Status dot pulse */
-        @@keyframes status-pulse {
-            0%, 100% { opacity: 1; }
-            50%       { opacity: 0.35; }
-        }
+        @@keyframes status-pulse { 0%,100%{opacity:1} 50%{opacity:.35} }
         .status-pulse { animation: status-pulse 1.8s ease-in-out infinite; }
+
+        /* YouTube iframe fills its container */
+        #ytPlayerContainer iframe { width: 100%; height: 100%; }
+
+        /* Chat scrollbar */
+        #chatMessages, #chatMessagesMobile {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.1) transparent;
+        }
+        #chatMessages::-webkit-scrollbar,
+        #chatMessagesMobile::-webkit-scrollbar { width: 4px; }
+        #chatMessages::-webkit-scrollbar-thumb,
+        #chatMessagesMobile::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1); border-radius: 2px;
+        }
+
+        /* Camera placeholder */
+        .cam-ph {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; height: 100%;
+            background: #0f172a; color: rgba(255,255,255,0.12); font-size: 1.75rem;
+        }
+
+        /*
+          Tailwind class allow-list (dynamic classes set by JS setBtn helper):
+          bg-sky-600 hover:bg-sky-500 ring-sky-500/30
+          bg-sky-700 hover:bg-sky-600 ring-sky-600/30
+          bg-violet-600 hover:bg-violet-500 ring-violet-500/30
+          bg-violet-700 hover:bg-violet-600 ring-violet-600/30
+          bg-slate-700 hover:bg-slate-600 ring-slate-600/30
+          bg-red-700 hover:bg-red-600 ring-red-600/30
+        */
     </style>
 </head>
 
 <body class="bg-slate-950 text-white flex flex-col overflow-hidden">
 
-    <!-- ─── Header ─────────────────────────────────────────────── -->
+    <!-- Header -->
     <header class="flex-none flex items-center gap-3 px-3 sm:px-5 h-11 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 z-20">
-
-        <!-- Brand -->
         <a href="/" class="font-bold text-sm text-white/80 hover:text-white transition shrink-0">
             <span class="text-violet-400">2g</span>Watch
         </a>
-
         <div class="h-4 w-px bg-white/10 shrink-0"></div>
-
-        <!-- Room ID + copy -->
         <div class="flex items-center gap-1.5 min-w-0">
             <span class="text-xs text-slate-500 hidden sm:inline shrink-0">Room:</span>
-            <code class="text-xs font-mono text-slate-300 bg-white/5 px-2 py-0.5 rounded truncate max-w-[120px] sm:max-w-none">@Model.RoomId</code>
+            <code class="text-xs font-mono text-slate-300 bg-white/5 px-2 py-0.5 rounded truncate max-w-[100px] sm:max-w-none"
+                aria-label="Room ID: @Model.RoomId">@Model.RoomId</code>
             <button id="btnCopyLink"
                 class="shrink-0 p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded transition text-sm"
-                title="Copy room link">📋</button>
+                title="Copy invite link">📋</button>
         </div>
-
         <div class="flex-1"></div>
-
-        <!-- Status indicator -->
         <div class="flex items-center gap-1.5 shrink-0">
             <span id="statusDot" class="status-pulse w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
-            <span id="statusText" class="text-xs text-slate-400 hidden sm:inline max-w-[180px] truncate">
-                Waiting for the other person…
-            </span>
+            <span id="statusText" class="text-xs text-slate-400 hidden sm:inline truncate max-w-[180px]">Connecting…</span>
         </div>
     </header>
 
-    <!-- ─── Main ───────────────────────────────────────────────── -->
+    <!-- URL Bar -->
+    <div class="flex-none flex gap-2 px-3 py-2 bg-slate-900/60 border-b border-white/5 z-10">
+        <input id="urlInput" type="text"
+            placeholder="Paste a YouTube or video URL to watch together…"
+            class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
+                   placeholder-slate-600 focus:outline-none focus:border-violet-500 transition min-w-0" />
+        <button id="btnLoad"
+            class="shrink-0 px-4 py-1.5 bg-violet-700 hover:bg-violet-600 active:scale-95 rounded-lg text-sm font-medium transition">
+            ▶ Load
+        </button>
+    </div>
+
+    <!-- Main -->
     <main class="flex-1 flex flex-col lg:flex-row min-h-0 overflow-hidden">
 
-        <!-- Screen share / primary video -->
-        <div class="relative flex-1 bg-black min-h-0 flex items-center justify-center">
-            <video id="remoteScreen" autoplay playsinline
-                class="w-full h-full object-contain"></video>
-
-            <!-- Placeholder (shown when no screen share) -->
-            <div id="screenPlaceholder"
+        <!-- Video stage -->
+        <div class="flex-1 relative bg-black min-h-0 overflow-hidden flex items-center justify-center">
+            <!-- YouTube embed (created by JS) -->
+            <div id="ytPlayerContainer" class="hidden absolute inset-0"></div>
+            <!-- HTML5 video (direct URL) -->
+            <video id="videoPlayer" class="hidden absolute inset-0 w-full h-full object-contain" controls></video>
+            <!-- Remote screen share -->
+            <video id="remoteScreen" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-contain"></video>
+            <!-- Empty-stage placeholder -->
+            <div id="stagePlaceholder"
                 class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                <span class="text-5xl sm:text-7xl opacity-10">🖥️</span>
-                <p class="text-xs text-slate-700 mt-3">No screen share active</p>
+                <span class="text-6xl sm:text-8xl opacity-10">&#127916;</span>
+                <p class="text-xs sm:text-sm text-slate-700 mt-3">Paste a URL above or share your screen</p>
             </div>
         </div>
 
-        <!-- ─ Webcam panel (right on desktop, strip at bottom on mobile) ─ -->
-        <div class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-white/5
-                    lg:border-t-0 lg:border-l lg:w-56 xl:w-64
-                    h-28 sm:h-36 lg:h-auto">
+        <!--
+            Right / bottom panel: webcams + chat
+            Mobile  : flex-row, h-20 strip at the bottom
+            Desktop : flex-col, w-72 sidebar on the right
+        -->
+        <div class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-white/5 lg:border-t-0 lg:border-l
+                    h-20 lg:h-auto lg:w-72">
 
-            <!-- Remote cam -->
-            <div class="relative flex-1 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
-                <video id="remoteCam" autoplay playsinline
-                    class="w-full h-full object-cover"></video>
-                <span class="vid-label">Other</span>
+            <!-- Webcam tiles -->
+            <div class="flex flex-row lg:flex-col flex-none border-b border-white/5 lg:h-48">
+
+                <!-- Remote cam -->
+                <div class="relative flex-1 lg:flex-none lg:h-24 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
+                    <video id="remoteCam" autoplay playsinline
+                        class="absolute inset-0 w-full h-full object-cover"></video>
+                    <div id="remoteCamPlaceholder" class="cam-ph absolute inset-0" aria-label="Remote camera inactive" role="img">&#128100;</div>
+                    <span class="vid-label" id="remoteLabel">Other</span>
+                </div>
+
+                <div class="w-px lg:w-auto lg:h-px bg-white/5 shrink-0"></div>
+
+                <!-- Local cam -->
+                <div class="relative flex-1 lg:flex-none lg:h-24 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
+                    <video id="localCam" autoplay playsinline muted
+                        class="absolute inset-0 w-full h-full object-cover -scale-x-100"></video>
+                    <div id="localCamPlaceholder" class="cam-ph absolute inset-0" aria-label="Local camera inactive" role="img">&#127910;</div>
+                    <span class="vid-label" id="localLabel">You</span>
+                </div>
+
             </div>
 
-            <!-- Divider -->
-            <div class="w-px lg:w-auto lg:h-px bg-white/5 shrink-0"></div>
-
-            <!-- Local cam -->
-            <div class="relative flex-1 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
-                <video id="localCam" autoplay playsinline muted
-                    class="w-full h-full object-cover -scale-x-100"></video>
-                <span class="vid-label">You</span>
+            <!-- Chat panel (desktop only; mobile uses the drawer below) -->
+            <div class="hidden lg:flex flex-1 flex-col min-h-0">
+                <div class="px-3 py-2 border-b border-white/5 text-xs text-slate-400 font-medium select-none">&#128172; Chat</div>
+                <div id="chatMessages" class="flex-1 overflow-y-auto px-3 py-2 space-y-2"></div>
+                <div class="flex gap-2 p-2 border-t border-white/5">
+                    <input id="chatInput" type="text" placeholder="Say something…" maxlength="500" autocomplete="off"
+                        class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
+                               placeholder-slate-600 focus:outline-none focus:border-violet-500 transition min-w-0" />
+                    <button id="btnSendChat"
+                        class="shrink-0 px-3 py-1.5 bg-violet-700 hover:bg-violet-600 active:scale-95 rounded-lg text-sm transition">
+                        &#10148;
+                    </button>
+                </div>
             </div>
+
         </div>
     </main>
 
-    <!-- ─── Controls bar ──────────────────────────────────────── -->
+    <!-- Mobile Chat Drawer -->
+    <div id="chatDrawer"
+        class="lg:hidden fixed inset-x-0 bottom-14 h-72 bg-slate-900 border-t border-white/10
+               flex flex-col z-30 transition-transform duration-200 translate-y-full shadow-2xl">
+        <div class="flex items-center justify-between px-3 py-2 border-b border-white/5 shrink-0">
+            <span class="text-xs text-slate-400 font-medium">&#128172; Chat</span>
+            <button id="btnCloseChat" class="text-slate-500 hover:text-white text-sm p-1 leading-none">&#10005;</button>
+        </div>
+        <div id="chatMessagesMobile" class="flex-1 overflow-y-auto px-3 py-2 space-y-2"></div>
+        <div class="flex gap-2 p-2 border-t border-white/5 shrink-0">
+            <input id="chatInputMobile" type="text" placeholder="Say something…" maxlength="500" autocomplete="off"
+                class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
+                       placeholder-slate-600 focus:outline-none focus:border-violet-500 transition min-w-0" />
+            <button id="btnSendChatMobile"
+                class="shrink-0 px-3 py-1.5 bg-violet-700 hover:bg-violet-600 active:scale-95 rounded-lg text-sm transition">
+                &#10148;
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer Controls -->
     <footer class="flex-none flex items-center gap-2 px-3 sm:px-5 h-14 bg-slate-900/95 backdrop-blur-sm border-t border-white/5 z-20">
 
+        <button id="btnMic"
+            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
+                   transition-all active:scale-95 shadow-sm ring-1 bg-slate-700 hover:bg-slate-600 ring-slate-600/30">
+            &#127908; <span class="hidden sm:inline">Mic</span>
+        </button>
+
         <button id="btnCam"
-            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium transition-all
-                   active:scale-95 shadow-sm bg-sky-700 hover:bg-sky-600 ring-1 ring-sky-600/30">
-            🎥 <span class="hidden sm:inline">Camera</span>
+            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
+                   transition-all active:scale-95 shadow-sm ring-1 bg-sky-700 hover:bg-sky-600 ring-sky-600/30">
+            &#127909; <span class="hidden sm:inline">Camera</span>
         </button>
 
         <button id="btnShare"
-            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium transition-all
-                   active:scale-95 shadow-sm bg-violet-700 hover:bg-violet-600 ring-1 ring-violet-600/30">
-            🖥️ <span class="hidden sm:inline">Screen</span>
+            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
+                   transition-all active:scale-95 shadow-sm ring-1 bg-violet-700 hover:bg-violet-600 ring-violet-600/30">
+            &#128187; <span class="hidden sm:inline">Screen</span>
         </button>
 
-        <!-- Mobile status -->
-        <div class="flex items-center gap-1.5 sm:hidden ml-1">
-            <span class="status-pulse w-1.5 h-1.5 rounded-full bg-amber-400" id="statusDotMobile"></span>
+        <!-- Chat toggle (mobile only) -->
+        <div class="relative lg:hidden">
+            <button id="btnChat"
+                class="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium
+                       transition-all active:scale-95 shadow-sm ring-1 bg-slate-700 hover:bg-slate-600 ring-slate-600/30">
+                &#128172;
+            </button>
+            <span id="chatBadge"
+                class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full
+                       text-[9px] flex items-center justify-center font-bold">!</span>
         </div>
 
         <div class="flex-1"></div>
 
         <a href="/"
-            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium transition-all
-                   active:scale-95 bg-red-700/80 hover:bg-red-600 ring-1 ring-red-600/30">
-            🚪 <span class="hidden sm:inline">Leave</span>
+            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
+                   transition-all active:scale-95 shadow-sm ring-1 bg-red-700/80 hover:bg-red-600 ring-red-600/30">
+            &#128682; <span class="hidden sm:inline">Leave</span>
         </a>
     </footer>
 
-    <script>
-        const ROOM_ID = "@Model.RoomId";
-    </script>
+    <script>const ROOM_ID = "@Model.RoomId";</script>
     <script src="/js/webrtc.js"></script>
-
-    <script>
-        // ── Copy room link ───────────────────────────────────────────
-        const copyBtn = document.getElementById("btnCopyLink");
-
-        function setCopy(icon) {
-            copyBtn.textContent = icon;
-            setTimeout(() => { copyBtn.textContent = "📋"; }, 1600);
-        }
-
-        function fallbackCopy(text) {
-            const ta = document.createElement("textarea");
-            ta.value = text;
-            ta.style.cssText = "position:fixed;opacity:0";
-            document.body.appendChild(ta);
-            ta.select();
-            try { return document.execCommand("copy"); }
-            finally { document.body.removeChild(ta); }
-        }
-
-        copyBtn.addEventListener("click", () => {
-            const url = location.href;
-            if (navigator.clipboard?.writeText) {
-                navigator.clipboard.writeText(url)
-                    .then(() => setCopy("✅"))
-                    .catch(() => setCopy(fallbackCopy(url) ? "✅" : "❌"));
-            } else {
-                setCopy(fallbackCopy(url) ? "✅" : "❌");
-            }
-        });
-
-        // ── Screen-share placeholder ─────────────────────────────────
-        const remoteScreenEl = document.getElementById("remoteScreen");
-        const placeholderEl  = document.getElementById("screenPlaceholder");
-
-        function syncPlaceholder() {
-            placeholderEl.classList.toggle("hidden", !!remoteScreenEl.srcObject);
-        }
-        remoteScreenEl.addEventListener("loadedmetadata", syncPlaceholder);
-        setInterval(syncPlaceholder, 500);
-
-        // ── Mirror status dot on mobile ──────────────────────────────
-        // The webrtc.js updateStatus() targets #statusDot; keep the mobile
-        // dot in sync by observing class changes on the main dot.
-        const mainDot   = document.getElementById("statusDot");
-        const mobileDot = document.getElementById("statusDotMobile");
-        const DOT_COLORS = ["bg-amber-400", "bg-green-400", "bg-red-400"];
-        const dotObserver = new MutationObserver(() => {
-            DOT_COLORS.forEach(cls => mobileDot.classList.remove(cls));
-            const active = DOT_COLORS.find(cls => mainDot.classList.contains(cls));
-            if (active) mobileDot.classList.add(active);
-        });
-        dotObserver.observe(mainDot, { attributes: true, attributeFilter: ["class"] });
-    </script>
+    <script src="https://www.youtube.com/iframe_api"></script>
 </body>
 
 </html>
