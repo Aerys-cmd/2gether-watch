@@ -4,6 +4,7 @@ let pc = new RTCPeerConnection({
 
 let localStream = null;
 let screenStream = null;
+let isMakingOffer = false;
 
 const wsUrl = location.protocol === "https:"
     ? `wss://${location.host}/ws`
@@ -16,6 +17,23 @@ let nextIncomingStreamKind = null; // classifies the next incoming remote track
 function updateStatus(text) {
     const el = document.getElementById("statusText");
     if (el) el.textContent = text;
+
+    // Update dot color
+    const dot = document.getElementById("statusDot");
+    if (dot) {
+        dot.classList.remove("bg-amber-400", "bg-green-400", "bg-red-400");
+        if (text.toLowerCase().includes("joined") || text.toLowerCase().includes("connected")) {
+            dot.classList.add("bg-green-400");
+        } else if (
+            text.toLowerCase().includes("left") ||
+            text.toLowerCase().includes("error") ||
+            text.toLowerCase().includes("disconnected")
+        ) {
+            dot.classList.add("bg-red-400");
+        } else {
+            dot.classList.add("bg-amber-400");
+        }
+    }
 }
 
 // --- WebSocket Handling ---
@@ -36,7 +54,7 @@ ws.onmessage = async (event) => {
     const raw = event.data;
 
     if (raw.startsWith("join:")) {
-        updateStatus("The other person joined!");
+        updateStatus("The other person joined! 🎉");
 
         // Renegotiate so the new peer receives any active streams
         if (localStream || screenStream) {
@@ -114,9 +132,15 @@ function wsSend(data) {
 
 // --- Renegotiate (send new offer with current tracks) ---
 async function renegotiate() {
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    wsSend(JSON.stringify(offer));
+    if (isMakingOffer) return;
+    isMakingOffer = true;
+    try {
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        wsSend(JSON.stringify(offer));
+    } finally {
+        isMakingOffer = false;
+    }
 }
 
 // --- Toggle Camera + Mic ---
@@ -129,7 +153,7 @@ async function startCamera() {
 
         wsSend(JSON.stringify({ type: "camera-off" }));
         document.getElementById("localCam").srcObject = null;
-        document.getElementById("btnCam").textContent = "🎥 Camera";
+        document.getElementById("btnCam").innerHTML = "🎥 <span class=\"hidden sm:inline\">Camera</span>";
         localStream = null;
         return;
     }
@@ -142,7 +166,7 @@ async function startCamera() {
     wsSend(JSON.stringify({ type: "metadata", kind: "camera" }));
     await renegotiate();
 
-    document.getElementById("btnCam").textContent = "🎥 Stop Camera";
+    document.getElementById("btnCam").innerHTML = "🎥 <span class=\"hidden sm:inline\">Stop Camera</span>";
 }
 
 // --- Toggle Screen Share ---
@@ -158,7 +182,7 @@ async function startScreenShare() {
     wsSend(JSON.stringify({ type: "metadata", kind: "screen" }));
     await renegotiate();
 
-    document.getElementById("btnShare").textContent = "🖥️ Stop Share";
+    document.getElementById("btnShare").innerHTML = "🖥️ <span class=\"hidden sm:inline\">Stop Share</span>";
 
     // Clean up when the user stops sharing via the browser's native UI
     const videoTrack = screenStream.getVideoTracks()[0];
@@ -177,7 +201,7 @@ function stopScreenShare() {
 
     wsSend(JSON.stringify({ type: "screen-off" }));
     screenStream = null;
-    document.getElementById("btnShare").textContent = "🖥️ Share";
+    document.getElementById("btnShare").innerHTML = "🖥️ <span class=\"hidden sm:inline\">Screen</span>";
 }
 
 // --- Controls ---
