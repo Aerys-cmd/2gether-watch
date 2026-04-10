@@ -8,6 +8,11 @@ const BTN_BASE =
     "flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium " +
     "transition-all active:scale-95 shadow-sm ring-1";
 
+// Throttle / tolerance constants
+const SYNC_THROTTLE_MS  = 500;  // minimum ms between outgoing sync messages
+const SEEK_THROTTLE_MS  = 1000; // minimum ms between outgoing seek messages
+const SYNC_TOLERANCE_S  = 2;    // seconds of drift before forcing a seek on sync
+
 // ── State ─────────────────────────────────────────────────────
 let ws, pc;
 let localStream  = null;   // camera + mic stream
@@ -236,7 +241,7 @@ async function toggleCamera() {
     if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
         pc.getSenders()
-            .filter(s => localStream.getTracks().includes(s.track))
+            .filter(s => s.track && localStream.getTracks().includes(s.track))
             .forEach(s => pc.removeTrack(s));
         wsSend({ type: "camera-off" });
         setCamSrc("local", null);
@@ -258,7 +263,8 @@ async function toggleCamera() {
         setBtn("btnCam", "🎥", "Stop Cam", "bg-sky-600 hover:bg-sky-500 ring-sky-500/30");
         updateMicButton();
     } catch (e) {
-        alert("Could not access camera/mic: " + (e.message ?? e));
+        showError("Could not access camera/mic. Check that your browser has permission and no other app is using the camera.");
+        console.error("Camera error:", e);
     }
 }
 
@@ -297,7 +303,7 @@ function stopScreenShare() {
     if (!screenStream) return;
     screenStream.getTracks().forEach(t => t.stop());
     pc.getSenders()
-        .filter(s => screenStream.getTracks().includes(s.track))
+        .filter(s => s.track && screenStream.getTracks().includes(s.track))
         .forEach(s => pc.removeTrack(s));
     wsSend({ type: "screen-off" });
     screenStream = null;
@@ -393,14 +399,28 @@ function createYTPlayer(videoId) {
 function onYtStateChange({ data }) {
     if (isApplyingSync) return;
     const now = Date.now();
-    if (now - lastSyncSent < 500) return; // throttle
+    if (now - lastSyncSent < SYNC_THROTTLE_MS) return; // throttle
     lastSyncSent = now;
     const t = ytPlayer?.getCurrentTime?.() ?? 0;
     if (data === YT.PlayerState.PLAYING) wsSend({ type: "sync", action: "play",  time: t });
     else if (data === YT.PlayerState.PAUSED)  wsSend({ type: "sync", action: "pause", time: t });
 }
 
+// Validates that a URL is a safe http(s) resource before assigning to a media element
+function isSafeMediaUrl(url) {
+    try {
+        const parsed = new URL(url);
+        return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+        return false;
+    }
+}
+
 function loadHtml5Video(url) {
+    if (!isSafeMediaUrl(url)) {
+        showError("Only http:// and https:// video URLs are supported.");
+        return;
+    }
     $("ytPlayerContainer").classList.add("hidden");
     if (!$("remoteScreen").srcObject) $("remoteScreen").classList.add("hidden");
     $("stagePlaceholder").classList.add("hidden");
@@ -413,7 +433,7 @@ function loadHtml5Video(url) {
     const maybeSend = (action) => {
         if (isApplyingSync) return;
         const now = Date.now();
-        if (now - lastSyncSent < 500) return;
+        if (now - lastSyncSent < SYNC_THROTTLE_MS) return;
         lastSyncSent = now;
         wsSend({ type: "sync", action, time: v.currentTime });
     };
@@ -423,7 +443,7 @@ function loadHtml5Video(url) {
     v.onseeked = () => {
         if (isApplyingSync) return;
         const now = Date.now();
-        if (now - lastSyncSent < 1000) return;
+        if (now - lastSyncSent < SEEK_THROTTLE_MS) return;
         lastSyncSent = now;
         wsSend({ type: "sync", action: "seek", time: v.currentTime });
     };
@@ -431,14 +451,18 @@ function loadHtml5Video(url) {
 
 function applyRemoteSync(msg) {
     if (msg.action === "load") {
+        // Validate the URL before trusting peer-provided content
+        const url = typeof msg.url === "string" ? msg.url.trim() : "";
+        if (!url) return;
+        const ytId = getYouTubeId(url);
+        if (!ytId && !isSafeMediaUrl(url)) return; // reject unsafe URLs from peers
         // Set the URL input, then load without re-broadcasting
-        $("urlInput").value = msg.url;
+        $("urlInput").value = url;
         isApplyingSync = true;
-        currentVideoUrl = msg.url;
-        const ytId = getYouTubeId(msg.url);
+        currentVideoUrl = url;
         if (ytId) loadYouTube(ytId);
-        else      loadHtml5Video(msg.url);
-        setTimeout(() => { isApplyingSync = false; }, 500);
+        else      loadHtml5Video(url);
+        setTimeout(() => { isApplyingSync = false; }, SYNC_THROTTLE_MS);
         return;
     }
 
@@ -447,10 +471,10 @@ function applyRemoteSync(msg) {
         if (currentVideoType === "youtube" && ytPlayer) {
             const cur = ytPlayer.getCurrentTime?.() ?? 0;
             if (msg.action === "play") {
-                if (Math.abs(cur - msg.time) > 2) ytPlayer.seekTo(msg.time, true);
+                if (Math.abs(cur - msg.time) > SYNC_TOLERANCE_S) ytPlayer.seekTo(msg.time, true);
                 ytPlayer.playVideo();
             } else if (msg.action === "pause") {
-                if (Math.abs(cur - msg.time) > 2) ytPlayer.seekTo(msg.time, true);
+                if (Math.abs(cur - msg.time) > SYNC_TOLERANCE_S) ytPlayer.seekTo(msg.time, true);
                 ytPlayer.pauseVideo();
             } else if (msg.action === "seek") {
                 ytPlayer.seekTo(msg.time, true);
@@ -458,10 +482,10 @@ function applyRemoteSync(msg) {
         } else if (currentVideoType === "html5") {
             const v = $("videoPlayer");
             if (msg.action === "play") {
-                if (Math.abs(v.currentTime - msg.time) > 2) v.currentTime = msg.time;
+                if (Math.abs(v.currentTime - msg.time) > SYNC_TOLERANCE_S) v.currentTime = msg.time;
                 v.play();
             } else if (msg.action === "pause") {
-                if (Math.abs(v.currentTime - msg.time) > 2) v.currentTime = msg.time;
+                if (Math.abs(v.currentTime - msg.time) > SYNC_TOLERANCE_S) v.currentTime = msg.time;
                 v.pause();
             } else if (msg.action === "seek") {
                 v.currentTime = msg.time;
@@ -546,6 +570,17 @@ function setBtn(id, icon, label, colorClasses) {
     if (!btn) return;
     btn.className = `${BTN_BASE} ${colorClasses}`;
     btn.innerHTML = `${icon} <span class="hidden sm:inline">${label}</span>`;
+}
+
+// Briefly shows an error toast instead of blocking alert()
+function showError(message) {
+    const toast = document.createElement("div");
+    toast.className =
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-red-700 text-white text-sm " +
+        "rounded-xl shadow-lg max-w-sm text-center pointer-events-none";
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 4000);
 }
 
 function fallbackCopy(text) {
