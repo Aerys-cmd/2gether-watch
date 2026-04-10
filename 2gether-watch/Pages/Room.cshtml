@@ -12,6 +12,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>2gether Watch — Room @Model.RoomId</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
         body { height: 100dvh; }
         @@supports not (height: 100dvh) { body { height: 100vh; } }
@@ -42,26 +43,22 @@
             background: rgba(255,255,255,0.1); border-radius: 2px;
         }
 
+        /* Camera tile */
+        .cam-tile { height: 7rem; }
+        @@media (min-width: 1024px) { .cam-tile { height: 7rem; width: 100%; } }
+
         /* Camera placeholder */
         .cam-ph {
             display: flex; align-items: center; justify-content: center;
             width: 100%; height: 100%;
             background: #0f172a; color: rgba(255,255,255,0.12); font-size: 1.75rem;
         }
-
-        /*
-          Tailwind class allow-list (dynamic classes set by JS setBtn helper):
-          bg-sky-600 hover:bg-sky-500 ring-sky-500/30
-          bg-sky-700 hover:bg-sky-600 ring-sky-600/30
-          bg-violet-600 hover:bg-violet-500 ring-violet-500/30
-          bg-violet-700 hover:bg-violet-600 ring-violet-600/30
-          bg-slate-700 hover:bg-slate-600 ring-slate-600/30
-          bg-red-700 hover:bg-red-600 ring-red-600/30
-        */
     </style>
 </head>
 
-<body class="bg-slate-950 text-white flex flex-col overflow-hidden">
+<body class="bg-slate-950 text-white flex flex-col overflow-hidden"
+      x-data="roomApp()"
+      x-init="init()">
 
     <!-- Header -->
     <header class="flex-none flex items-center gap-3 px-3 sm:px-5 h-11 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 z-20">
@@ -79,8 +76,9 @@
         </div>
         <div class="flex-1"></div>
         <div class="flex items-center gap-1.5 shrink-0">
-            <span id="statusDot" class="status-pulse w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
-            <span id="statusText" class="text-xs text-slate-400 hidden sm:inline truncate max-w-[180px]">Connecting…</span>
+            <span class="status-pulse w-2 h-2 rounded-full shrink-0"
+                  :class="{ 'bg-green-400': statusColor==='green', 'bg-amber-400': statusColor==='amber', 'bg-red-400': statusColor==='red' }"></span>
+            <span class="text-xs text-slate-400 hidden sm:inline truncate max-w-[200px]" x-text="status"></span>
         </div>
     </header>
 
@@ -117,30 +115,22 @@
 
         <!--
             Right / bottom panel: webcams + chat
-            Mobile  : flex-row, h-20 strip at the bottom
+            Mobile  : flex-row, h-28 strip at the bottom
             Desktop : flex-col, w-72 sidebar on the right
         -->
         <div class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-white/5 lg:border-t-0 lg:border-l
-                    h-20 lg:h-auto lg:w-72">
+                    h-28 lg:h-auto lg:w-72">
 
-            <!-- Webcam tiles -->
-            <div class="flex flex-row lg:flex-col flex-none border-b border-white/5 lg:h-48">
+            <!-- Camera tiles — scrollable strip (mobile: horizontal, desktop: vertical) -->
+            <div id="camGrid"
+                 class="flex flex-row lg:flex-col flex-none overflow-x-auto lg:overflow-x-hidden overflow-y-hidden lg:overflow-y-auto
+                        border-b border-white/5 lg:max-h-72">
 
-                <!-- Remote cam -->
-                <div class="relative flex-1 lg:flex-none lg:h-24 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
-                    <video id="remoteCam" autoplay playsinline
-                        class="absolute inset-0 w-full h-full object-cover"></video>
-                    <div id="remoteCamPlaceholder" class="cam-ph absolute inset-0" aria-label="Remote camera inactive" role="img">&#128100;</div>
-                    <span class="vid-label" id="remoteLabel">Other</span>
-                </div>
-
-                <div class="w-px lg:w-auto lg:h-px bg-white/5 shrink-0"></div>
-
-                <!-- Local cam -->
-                <div class="relative flex-1 lg:flex-none lg:h-24 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
+                <!-- Local cam tile (always present) -->
+                <div id="localCamTile" class="relative flex-none bg-slate-800 overflow-hidden cam-tile w-28 lg:w-full shrink-0">
                     <video id="localCam" autoplay playsinline muted
                         class="absolute inset-0 w-full h-full object-cover -scale-x-100"></video>
-                    <div id="localCamPlaceholder" class="cam-ph absolute inset-0" aria-label="Local camera inactive" role="img">&#127910;</div>
+                    <div id="localCamPh" class="cam-ph absolute inset-0" aria-label="Local camera inactive" role="img">&#127910;</div>
                     <span class="vid-label" id="localLabel">You</span>
                 </div>
 
@@ -187,22 +177,29 @@
     <!-- Footer Controls -->
     <footer class="flex-none flex items-center gap-2 px-3 sm:px-5 h-14 bg-slate-900/95 backdrop-blur-sm border-t border-white/5 z-20">
 
-        <button id="btnMic"
+        <button @@click="$rtc.toggleMic()"
             class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
-                   transition-all active:scale-95 shadow-sm ring-1 bg-slate-700 hover:bg-slate-600 ring-slate-600/30">
-            &#127908; <span class="hidden sm:inline">Mic</span>
+                   transition-all active:scale-95 shadow-sm ring-1"
+            :class="micActive ? 'bg-slate-700 hover:bg-slate-600 ring-slate-600/30' : 'bg-red-700 hover:bg-red-600 ring-red-600/30'"
+            :title="micActive ? 'Mute microphone' : 'Unmute microphone'">
+            <span x-text="micActive ? '🎤' : '🔇'"></span>
+            <span class="hidden sm:inline" x-text="micActive ? 'Mic' : 'Unmute'"></span>
         </button>
 
-        <button id="btnCam"
+        <button @@click="$rtc.toggleCamera()"
             class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
-                   transition-all active:scale-95 shadow-sm ring-1 bg-sky-700 hover:bg-sky-600 ring-sky-600/30">
-            &#127909; <span class="hidden sm:inline">Camera</span>
+                   transition-all active:scale-95 shadow-sm ring-1"
+            :class="camActive ? 'bg-sky-600 hover:bg-sky-500 ring-sky-500/30' : 'bg-sky-700 hover:bg-sky-600 ring-sky-600/30'"
+            :title="camActive ? 'Stop camera' : 'Start camera'">
+            &#127909; <span class="hidden sm:inline" x-text="camActive ? 'Stop Cam' : 'Camera'"></span>
         </button>
 
-        <button id="btnShare"
+        <button @@click="$rtc.toggleScreenShare()"
             class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
-                   transition-all active:scale-95 shadow-sm ring-1 bg-violet-700 hover:bg-violet-600 ring-violet-600/30">
-            &#128187; <span class="hidden sm:inline">Screen</span>
+                   transition-all active:scale-95 shadow-sm ring-1"
+            :class="screenActive ? 'bg-violet-600 hover:bg-violet-500 ring-violet-500/30' : 'bg-violet-700 hover:bg-violet-600 ring-violet-600/30'"
+            :title="screenActive ? 'Stop screen share' : 'Share screen'">
+            &#128187; <span class="hidden sm:inline" x-text="screenActive ? 'Stop Share' : 'Screen'"></span>
         </button>
 
         <!-- Chat toggle (mobile only) -->
@@ -214,7 +211,9 @@
             </button>
             <span id="chatBadge"
                 class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full
-                       text-[9px] flex items-center justify-center font-bold">!</span>
+                       text-[9px] flex items-center justify-center font-bold"
+                x-show="unreadCount > 0"
+                x-text="unreadCount > maxUnreadBadge ? maxUnreadBadge + '+' : unreadCount"></span>
         </div>
 
         <div class="flex-1"></div>
@@ -226,7 +225,29 @@
         </a>
     </footer>
 
-    <script>const ROOM_ID = "@Model.RoomId";</script>
+    <script>
+        const ROOM_ID = "@Model.RoomId";
+
+        function roomApp() {
+            return {
+                status: "Connecting…",
+                statusColor: "amber",
+                micActive: true,
+                camActive: false,
+                screenActive: false,
+                unreadCount: 0,
+                peerCount: 0,
+                // Maximum count shown in the chat unread badge before showing "N+"
+                maxUnreadBadge: 9,
+
+                get $rtc() { return window.rtcActions ?? {}; },
+
+                init() {
+                    window.alpineApp = this;
+                },
+            };
+        }
+    </script>
     <script src="/js/webrtc.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
 </body>

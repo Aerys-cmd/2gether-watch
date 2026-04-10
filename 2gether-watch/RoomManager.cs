@@ -1,12 +1,39 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
+using System.Text.Json;
 
 namespace _2gether_watch;
 
+/// <summary>
+/// Manages WebSocket signaling rooms for 2gether Watch.
+///
+/// Protocol (client → server):
+///   "join:{roomId}"            – first message after connect; assigns a peer ID.
+///
+/// Protocol (server → client):
+///   "error:room-full"          – room is at capacity; connection will be closed.
+///   "self:{peerId}"            – your assigned peer ID.
+///   "peers:{id1},{id2},…"      – comma-separated list of peer IDs already in room
+///                                (empty string after colon means you are the first).
+///   "peer-joined:{peerId}"     – a new peer entered the room.
+///   "peer-left:{peerId}"       – a peer left the room.
+///   JSON { "from":"{id}", … }  – message relayed from another peer (broadcast or targeted).
+///
+/// Protocol (client → server, after join):
+///   JSON { "to": "{peerId}", … } – targeted relay to one peer.
+///   JSON { … }                   – broadcast relay to every other peer in the room.
+/// </summary>
 public class RoomManager
 {
-    private readonly ConcurrentDictionary<string, HashSet<WebSocket>> _rooms = new();
+    public const int MaxRoomSize = 10;
+    // 12 hex chars (48-bit) gives ~281 trillion possible IDs: negligible collision probability
+    // for rooms of at most 10 peers with short-lived sessions.
+    private const int PeerIdLength = 12;
+    private const int MaxMessageBytes = 64 * 1024; // 64 KB
+
+    // roomId → (peerId → WebSocket)
+    private readonly ConcurrentDictionary<string, Dictionary<string, WebSocket>> _rooms = new();
     private readonly Lock _lock = new();
     private readonly ILogger<RoomManager> _logger;
 
@@ -15,67 +42,228 @@ public class RoomManager
         _logger = logger;
     }
 
+    // Exposed for testing
+    public int GetRoomSize(string roomId)
+    {
+        lock (_lock)
+        {
+            return _rooms.TryGetValue(roomId, out var r) ? r.Count : 0;
+        }
+    }
+
+    public IReadOnlyList<string> GetPeerIds(string roomId)
+    {
+        lock (_lock)
+        {
+            if (!_rooms.TryGetValue(roomId, out var r)) return [];
+            return [.. r.Keys];
+        }
+    }
+
     public async Task HandleConnectionAsync(WebSocket socket)
     {
         var buffer = new byte[1024 * 16];
         string? roomId = null;
+        string? peerId = null;
 
         try
         {
+            // ── Step 1: wait for the "join:{roomId}" handshake ────────────
+            var handshake = await ReceiveFullMessageAsync(socket, buffer);
+            if (handshake is null || !handshake.StartsWith("join:")) return;
+
+            roomId = handshake[5..];
+            if (string.IsNullOrWhiteSpace(roomId)) return;
+
+            // ── Step 2: admit or reject ────────────────────────────────────
+            string[] existingIds;
+            lock (_lock)
+            {
+                var room = _rooms.GetOrAdd(roomId, _ => new Dictionary<string, WebSocket>());
+
+                if (room.Count >= MaxRoomSize)
+                {
+                    // Reject without adding
+                    _ = RejectFullRoomAsync(socket);
+                    return;
+                }
+
+                peerId = GeneratePeerId();
+                existingIds = [.. room.Keys];
+                room[peerId] = socket;
+            }
+
+            _logger.LogInformation("Peer {PeerId} joined room {RoomId} ({Count} existing)", peerId, roomId, existingIds.Length);
+
+            // ── Step 3: send welcome messages to the new peer ──────────────
+            await SendToAsync(socket, $"self:{peerId}");
+            await SendToAsync(socket, $"peers:{string.Join(',', existingIds)}");
+
+            // ── Step 4: notify existing peers ─────────────────────────────
+            await BroadcastRawAsync(roomId, peerId, $"peer-joined:{peerId}");
+
+            // ── Step 5: relay loop ─────────────────────────────────────────
             while (socket.State == WebSocketState.Open)
             {
                 var msg = await ReceiveFullMessageAsync(socket, buffer);
-                if (msg is null) break; // connection closed
+                if (msg is null) break;
 
-                if (msg.StartsWith("join:"))
-                {
-                    roomId = msg[5..];
-
-                    int existingPeerCount;
-                    lock (_lock)
-                    {
-                        var room = _rooms.GetOrAdd(roomId, _ => new HashSet<WebSocket>());
-                        existingPeerCount = room.Count;
-                        room.Add(socket);
-                    }
-
-                    _logger.LogInformation("Socket joined room {RoomId} ({Count} existing peer(s))", roomId, existingPeerCount);
-
-                    // If there were already peers in the room, tell the new joiner so their
-                    // UI reflects that someone is already present.
-                    if (existingPeerCount > 0)
-                    {
-                        await SendToAsync(socket, "join:" + roomId);
-                    }
-
-                    // Notify existing peers that someone new joined
-                    await BroadcastAsync(roomId, socket, "join:" + roomId);
-                    continue;
-                }
-
-                // Broadcast signaling messages to other peers in the same room
-                if (roomId != null)
-                {
-                    await BroadcastAsync(roomId, socket, msg);
-                }
+                await RelayMessageAsync(roomId, peerId, msg);
             }
         }
         catch (WebSocketException ex)
         {
-            _logger.LogWarning(ex, "WebSocket error for room {RoomId}", roomId);
+            _logger.LogWarning(ex, "WebSocket error for peer {PeerId} in room {RoomId}", peerId, roomId);
         }
         finally
         {
-            if (roomId != null)
+            if (roomId != null && peerId != null)
             {
-                RemoveFromRoom(roomId, socket);
-                _logger.LogInformation("Socket left room {RoomId}", roomId);
-                await BroadcastAsync(roomId, socket, "leave:" + roomId);
+                RemovePeer(roomId, peerId);
+                _logger.LogInformation("Peer {PeerId} left room {RoomId}", peerId, roomId);
+                await BroadcastRawAsync(roomId, peerId, $"peer-left:{peerId}");
             }
         }
     }
 
-    private const int MaxMessageBytes = 64 * 1024; // 64 KB
+    // ── Message routing ───────────────────────────────────────────────────
+
+    private async Task RelayMessageAsync(string roomId, string fromPeerId, string message)
+    {
+        if (!message.StartsWith('{'))
+        {
+            // Non-JSON – broadcast as-is (shouldn't normally happen after join)
+            await BroadcastRawAsync(roomId, fromPeerId, message);
+            return;
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(message);
+            var root = doc.RootElement;
+
+            // Build augmented message with "from" field (prevents spoofing)
+            var augmented = BuildAugmented(root, fromPeerId);
+
+            if (root.TryGetProperty("to", out var toProp) && toProp.GetString() is string targetId)
+            {
+                // Targeted relay
+                WebSocket? target;
+                lock (_lock)
+                {
+                    target = _rooms.TryGetValue(roomId, out var room) &&
+                             room.TryGetValue(targetId, out var ws) ? ws : null;
+                }
+                if (target != null)
+                    await SendToAsync(target, augmented);
+            }
+            else
+            {
+                // Broadcast relay
+                await BroadcastRawAsync(roomId, fromPeerId, augmented);
+            }
+        }
+        catch (JsonException)
+        {
+            // Malformed JSON – drop silently
+            _logger.LogDebug("Dropped malformed JSON from {PeerId}", fromPeerId);
+        }
+    }
+
+    /// <summary>Serialises the peer's JSON object with an injected "from" property.</summary>
+    private static string BuildAugmented(JsonElement root, string fromPeerId)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new Utf8JsonWriter(ms))
+        {
+            w.WriteStartObject();
+            w.WriteString("from", fromPeerId);
+            foreach (var prop in root.EnumerateObject())
+            {
+                // Never let a client spoof the "from" or "to" fields in the output
+                if (prop.Name is "from" or "to") continue;
+                prop.WriteTo(w);
+            }
+            w.WriteEndObject();
+        }
+        return Encoding.UTF8.GetString(ms.ToArray());
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────
+
+    private static string GeneratePeerId() => Guid.NewGuid().ToString("N")[..PeerIdLength];
+
+    private static async Task RejectFullRoomAsync(WebSocket socket)
+    {
+        await SendToAsync(socket, "error:room-full");
+        await socket.CloseAsync(
+            WebSocketCloseStatus.PolicyViolation,
+            "Room is full.",
+            CancellationToken.None);
+    }
+
+    private void RemovePeer(string roomId, string peerId)
+    {
+        lock (_lock)
+        {
+            if (_rooms.TryGetValue(roomId, out var room))
+            {
+                room.Remove(peerId);
+                if (room.Count == 0)
+                {
+                    _rooms.TryRemove(roomId, out _);
+                    _logger.LogInformation("Room {RoomId} closed (empty)", roomId);
+                }
+            }
+        }
+    }
+
+    private static async Task SendToAsync(WebSocket socket, string message)
+    {
+        if (socket.State != WebSocketState.Open) return;
+        var bytes = Encoding.UTF8.GetBytes(message);
+        try
+        {
+            await socket.SendAsync(
+                new ArraySegment<byte>(bytes),
+                WebSocketMessageType.Text,
+                endOfMessage: true,
+                CancellationToken.None);
+        }
+        catch (WebSocketException)
+        {
+            // Peer already gone – ignore
+        }
+    }
+
+    /// <summary>Sends a raw string to every peer in the room except the sender.</summary>
+    private async Task BroadcastRawAsync(string roomId, string senderPeerId, string message)
+    {
+        List<WebSocket> targets;
+        lock (_lock)
+        {
+            if (!_rooms.TryGetValue(roomId, out var room)) return;
+            targets = room
+                .Where(kv => kv.Key != senderPeerId && kv.Value.State == WebSocketState.Open)
+                .Select(kv => kv.Value)
+                .ToList();
+        }
+
+        var bytes = Encoding.UTF8.GetBytes(message);
+        var segment = new ArraySegment<byte>(bytes);
+
+        foreach (var peer in targets)
+        {
+            try
+            {
+                await peer.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
+            }
+            catch (WebSocketException ex)
+            {
+                _logger.LogWarning(ex, "Failed to broadcast to a peer in room {RoomId}", roomId);
+            }
+        }
+    }
 
     private static async Task<string?> ReceiveFullMessageAsync(WebSocket socket, byte[] buffer)
     {
@@ -99,53 +287,5 @@ public class RoomManager
         } while (!result.EndOfMessage);
 
         return Encoding.UTF8.GetString(ms.ToArray());
-    }
-
-    private void RemoveFromRoom(string roomId, WebSocket socket)
-    {
-        lock (_lock)
-        {
-            if (_rooms.TryGetValue(roomId, out var room))
-            {
-                room.Remove(socket);
-                if (room.Count == 0)
-                {
-                    _rooms.TryRemove(roomId, out _);
-                    _logger.LogInformation("Room {RoomId} closed (empty)", roomId);
-                }
-            }
-        }
-    }
-
-    private static async Task SendToAsync(WebSocket socket, string message)
-    {
-        if (socket.State != WebSocketState.Open) return;
-        var bytes = Encoding.UTF8.GetBytes(message);
-        await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
-    }
-
-    private async Task BroadcastAsync(string roomId, WebSocket sender, string message)
-    {
-        List<WebSocket> peers;
-        lock (_lock)
-        {
-            if (!_rooms.TryGetValue(roomId, out var room)) return;
-            peers = room.Where(p => p != sender && p.State == WebSocketState.Open).ToList();
-        }
-
-        var bytes = Encoding.UTF8.GetBytes(message);
-        var segment = new ArraySegment<byte>(bytes);
-
-        foreach (var peer in peers)
-        {
-            try
-            {
-                await peer.SendAsync(segment, WebSocketMessageType.Text, true, CancellationToken.None);
-            }
-            catch (WebSocketException ex)
-            {
-                _logger.LogWarning(ex, "Failed to send to a peer in room {RoomId}", roomId);
-            }
-        }
     }
 }

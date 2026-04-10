@@ -1,354 +1,488 @@
-// ──────────────────────────────────────────────────────────────
-//  2gether Watch — WebRTC + Chat + Video Sync Engine
-// ──────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+//  2gether Watch — WebRTC mesh signaling + Chat + Video Sync
+//  Supports up to 10 participants via a full-mesh RTCPeerConnection topology.
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Config ────────────────────────────────────────────────────
+// ── User identity ─────────────────────────────────────────────────────────────
 const USERNAME = localStorage.getItem("2gw_username") || "Viewer";
-const BTN_BASE =
-    "flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium " +
-    "transition-all active:scale-95 shadow-sm ring-1";
 
-// Throttle / tolerance constants
-const SYNC_THROTTLE_MS  = 500;  // minimum ms between outgoing sync messages
-const SEEK_THROTTLE_MS  = 1000; // minimum ms between outgoing seek messages
-const SYNC_TOLERANCE_S  = 2;    // seconds of drift before forcing a seek on sync
+// ── Constants ────────────────────────────────────────────────────────────────
+const ICE_SERVERS = [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+];
+const SYNC_THROTTLE_MS       = 500;
+const SEEK_THROTTLE_MS       = 1000;
+const SYNC_TOLERANCE_S       = 2;
+// Time to suppress echo events after we apply a remote sync action.
+// Must be longer than the browser's own seek/play event debounce (~300 ms).
+const APPLY_SYNC_GUARD_MS    = 600;
+// Delay before pushing our own video state to a newly joined peer, to give
+// their player time to initialise before receiving play/pause commands.
+const SYNC_SHARE_DELAY_MS    = 1200;
+// Maximum number of unread chat notifications to display in the badge.
+const MAX_UNREAD_BADGE_COUNT = 9;
 
-// ── State ─────────────────────────────────────────────────────
-let ws, pc;
-let localStream  = null;   // camera + mic stream
-let screenStream = null;   // screen share stream
-let micEnabled   = true;   // audio mute state
-
-// Maps remote stream IDs → their kind ("camera" | "screen")
-const streamKindMap = {};
-
-// WebRTC negotiation lock
-let makingOffer = false;
-
-// ── Video player state ────────────────────────────────────────
-let ytPlayer       = null;    // YouTube IFrame API player instance
-let ytReady        = false;   // YT API has loaded
-let currentVideoType = null;  // "youtube" | "html5" | "screen" | null
-let currentVideoUrl  = "";
-let isApplyingSync   = false; // prevents sync-event echo loop
-let lastSyncSent     = 0;     // throttle outgoing sync messages
-
-// ── DOM helper ────────────────────────────────────────────────
-const $ = (id) => document.getElementById(id);
-
-// ── Status indicator ─────────────────────────────────────────
-function updateStatus(text) {
-    const el = $("statusText");
-    if (el) el.textContent = text;
-
-    const dot = $("statusDot");
-    if (!dot) return;
-    dot.classList.remove("bg-amber-400", "bg-green-400", "bg-red-400");
-    const lc = text.toLowerCase();
-    if (lc.includes("connected") || lc.includes("🎉")) {
-        dot.classList.add("bg-green-400");
-    } else if (lc.includes("left") || lc.includes("error") || lc.includes("failed") || lc.includes("disconnect")) {
-        dot.classList.add("bg-red-400");
-    } else {
-        dot.classList.add("bg-amber-400");
-    }
+// ── Alpine app state (populated in initWebRTC, read/written throughout) ──────
+function getApp() { return window.alpineApp ?? null; }
+function setState(patch) {
+    const app = getApp();
+    if (app) Object.assign(app, patch);
 }
 
-// ── WebSocket ─────────────────────────────────────────────────
-function initWS() {
+// ── WebSocket ────────────────────────────────────────────────────────────────
+let ws = null;
+let myPeerId = null;  // assigned by server
+
+function wsConnect() {
     const proto = location.protocol === "https:" ? "wss" : "ws";
     ws = new WebSocket(`${proto}://${location.host}/ws`);
-    ws.onopen    = () => { ws.send("join:" + ROOM_ID); updateStatus("Waiting for others…"); };
-    ws.onclose   = () => updateStatus("Disconnected — reload to reconnect.");
-    ws.onerror   = () => updateStatus("Connection error — reload.");
-    ws.onmessage = handleWsMessage;
+
+    ws.onopen  = () => {
+        ws.send("join:" + ROOM_ID);
+        setState({ status: "Joining room…", statusColor: "amber" });
+    };
+    ws.onclose = () => setState({ status: "Disconnected — reload to reconnect.", statusColor: "red" });
+    ws.onerror = () => setState({ status: "Connection error — reload.", statusColor: "red" });
+    ws.onmessage = onWsMessage;
 }
 
 function wsSend(data) {
-    if (ws?.readyState === WebSocket.OPEN) {
+    if (ws?.readyState === WebSocket.OPEN)
         ws.send(typeof data === "string" ? data : JSON.stringify(data));
-    }
 }
 
-async function handleWsMessage(event) {
+async function onWsMessage(event) {
     const raw = event.data;
 
-    if (raw.startsWith("join:")) {
-        updateStatus("Connected 🎉");
-        wsSend({ type: "username", name: USERNAME });
-        // Renegotiate if we have active streams so the new peer receives them
-        if (localStream || screenStream) {
-            sendStreamMap();
-            await negotiate();
+    // ── Control messages ───────────────────────────────────────────────────
+    if (raw.startsWith("self:")) {
+        myPeerId = raw.slice(5);
+        return;
+    }
+
+    if (raw.startsWith("peers:")) {
+        const idList = raw.slice(6);
+        if (idList) {
+            // We are the new joiner — offer to every existing peer
+            for (const pid of idList.split(",")) {
+                if (pid) await initiateConnection(pid);
+            }
         }
-        // Share current video state with the newly-joined peer
-        sendVideoState();
+        setState({ status: idList ? "Connected 🎉" : "Waiting for others…", statusColor: idList ? "green" : "amber" });
         return;
     }
 
-    if (raw.startsWith("leave:")) {
-        updateStatus("The other person left.");
-        clearRemoteMedia();
+    if (raw.startsWith("peer-joined:")) {
+        const pid = raw.slice(12);
+        // We are an existing peer — create a PC and wait for the new joiner's offer
+        ensurePeerState(pid);
+        setState({ status: "Connected 🎉", statusColor: "green", peerCount: peerStates.size });
         return;
     }
 
+    if (raw.startsWith("peer-left:")) {
+        const pid = raw.slice(10);
+        closePeer(pid);
+        setState({ status: peerStates.size > 0 ? "Connected 🎉" : "Waiting for others…",
+                   statusColor: peerStates.size > 0 ? "green" : "amber",
+                   peerCount: peerStates.size });
+        return;
+    }
+
+    if (raw.startsWith("error:room-full")) {
+        setState({ status: "Room is full (max 10 participants).", statusColor: "red" });
+        showError("This room is full. Maximum 10 participants are allowed.");
+        return;
+    }
+
+    // ── JSON relay messages ────────────────────────────────────────────────
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    if (!msg?.type) return;
+    if (!msg?.type || !msg?.from) return;
+
+    const fromId = msg.from;
+    const state  = ensurePeerState(fromId);
 
     switch (msg.type) {
-        // ── WebRTC signaling ──────────────────────────────────
         case "offer":
-            await handleOffer(msg);
+            await handleOffer(fromId, state, msg);
             break;
         case "answer":
-            if (pc.signalingState === "have-local-offer") {
-                await pc.setRemoteDescription(msg);
-            }
+            if (state.pc.signalingState === "have-local-offer")
+                await state.pc.setRemoteDescription(msg).catch(e => console.warn("setRemoteDescription(answer):", e));
             break;
         case "candidate":
-            if (msg.candidate) {
-                try { await pc.addIceCandidate(msg.candidate); } catch { /* stale candidate */ }
-            }
+            if (msg.candidate)
+                await state.pc.addIceCandidate(msg.candidate).catch(() => {});
             break;
-
-        // ── Stream metadata ───────────────────────────────────
         case "streammap":
-            Object.assign(streamKindMap, msg.map);
+            Object.assign(state.streamKindMap, msg.map);
             break;
-
-        // ── Media events ──────────────────────────────────────
         case "camera-off":
-            setCamSrc("remote", null);
+            removePeerCam(fromId);
             break;
         case "screen-off":
-            clearRemoteScreen();
+            clearRemoteScreen(fromId);
             break;
-
-        // ── Presence ──────────────────────────────────────────
-        case "username": {
-            const el = $("remoteLabel");
-            if (el) el.textContent = msg.name;
+        case "username":
+            state.username = msg.name;
+            updatePeerLabel(fromId, msg.name);
             break;
-        }
-
-        // ── Chat ──────────────────────────────────────────────
         case "chat":
             appendChatMessage(msg.name, msg.text, msg.ts, false);
             break;
-
-        // ── Video sync ────────────────────────────────────────
         case "sync":
             applyRemoteSync(msg);
             break;
     }
 }
 
-// ── WebRTC ────────────────────────────────────────────────────
-function initPC() {
-    if (pc) {
-        pc.onicecandidate          = null;
-        pc.ontrack                 = null;
-        pc.onnegotiationneeded     = null;
-        pc.oniceconnectionstatechange = null;
-        pc.close();
-    }
+// ── Per-peer state ────────────────────────────────────────────────────────────
+// Map<peerId, { pc, makingOffer, streamKindMap, username, camEl }>
+const peerStates = new Map();
 
-    pc = new RTCPeerConnection({
-        iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" },
-        ],
-    });
+function ensurePeerState(peerId) {
+    if (!peerStates.has(peerId)) {
+        const state = {
+            pc: createPC(peerId),
+            makingOffer: false,
+            streamKindMap: {},
+            username: "Viewer",
+            camEl: null,
+        };
+        peerStates.set(peerId, state);
+        addPeerCamTile(peerId, state);
+        // Share our identity and current video state with the new peer
+        wsSend({ to: peerId, type: "username", name: USERNAME });
+        sendVideoStateTo(peerId);
+        return state;
+    }
+    return peerStates.get(peerId);
+}
+
+// ── RTCPeerConnection factory ─────────────────────────────────────────────────
+function createPC(peerId) {
+    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     pc.onicecandidate = ({ candidate }) => {
-        if (candidate) wsSend({ type: "candidate", candidate });
+        if (candidate) wsSend({ to: peerId, type: "candidate", candidate });
     };
 
-    pc.ontrack = ({ streams }) => {
+    pc.ontrack = ({ track, streams }) => {
         const stream = streams?.[0];
         if (!stream) return;
-        const kind = streamKindMap[stream.id];
+        const state = peerStates.get(peerId);
+        if (!state) return;
+        const kind = state.streamKindMap[stream.id];
         if (kind === "screen") {
-            setRemoteScreen(stream);
+            setRemoteScreen(peerId, stream);
         } else {
-            setCamSrc("remote", stream);
+            setPeerCamStream(peerId, stream);
         }
     };
 
-    // onnegotiationneeded fires automatically when tracks are added/removed
-    pc.onnegotiationneeded = () => negotiate();
-
     pc.oniceconnectionstatechange = () => {
         const s = pc.iceConnectionState;
-        if (s === "connected" || s === "completed") updateStatus("Connected 🎉");
-        else if (s === "disconnected")              updateStatus("Connection lost…");
-        else if (s === "failed")                    updateStatus("Connection failed — reload.");
+        if (s === "failed") {
+            // Try ICE restart
+            pc.restartIce();
+        }
+        if (s === "disconnected" || s === "failed") {
+            setState({ status: "Connection unstable…", statusColor: "amber" });
+        }
     };
+
+    pc.onsignalingstatechange = () => {
+        if (pc.signalingState === "stable") {
+            const state = peerStates.get(peerId);
+            if (state) state.makingOffer = false;
+        }
+    };
+
+    // Add existing local tracks to the new PC
+    if (localCamStream) localCamStream.getTracks().forEach(t => pc.addTrack(t, localCamStream));
+    if (localScreenStream) localScreenStream.getTracks().forEach(t => pc.addTrack(t, localScreenStream));
+
+    return pc;
 }
 
-// Creates and sends an SDP offer (with negotiation-lock guard)
-async function negotiate() {
-    if (makingOffer || pc.signalingState !== "stable") return;
-    makingOffer = true;
+// Called by the new joiner to initiate a connection with an existing peer
+async function initiateConnection(peerId) {
+    const state = ensurePeerState(peerId);
+    await sendOffer(peerId, state);
+}
+
+async function sendOffer(peerId, state) {
+    if (state.makingOffer || state.pc.signalingState !== "stable") return;
+    state.makingOffer = true;
     try {
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        wsSend(pc.localDescription);
+        const offer = await state.pc.createOffer();
+        await state.pc.setLocalDescription(offer);
+        // Send streammap before the offer so the remote side can classify incoming tracks
+        sendStreamMapTo(peerId);
+        wsSend(Object.assign({ to: peerId }, state.pc.localDescription.toJSON()));
     } catch (e) {
-        console.error("negotiate:", e);
-    } finally {
-        makingOffer = false;
+        console.error("sendOffer:", e);
+        state.makingOffer = false;
     }
 }
 
-// Handles an incoming offer; rolls back our own offer on collision
-async function handleOffer(offer) {
-    if (pc.signalingState === "have-local-offer") {
-        // Glare / collision — roll back our pending offer
-        await pc.setLocalDescription({ type: "rollback" });
-        makingOffer = false;
+async function handleOffer(fromId, state, offer) {
+    if (state.pc.signalingState === "have-local-offer") {
+        // Glare – we roll back ours; the peer with the lower ID wins
+        if (myPeerId < fromId) {
+            // We should be the offerer — roll back theirs by ignoring
+            return;
+        }
+        await state.pc.setLocalDescription({ type: "rollback" }).catch(() => {});
+        state.makingOffer = false;
     }
-    await pc.setRemoteDescription(offer);
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    wsSend(pc.localDescription);
+    try {
+        await state.pc.setRemoteDescription({ type: "offer", sdp: offer.sdp });
+        const answer = await state.pc.createAnswer();
+        await state.pc.setLocalDescription(answer);
+        wsSend(Object.assign({ to: fromId }, state.pc.localDescription.toJSON()));
+    } catch (e) {
+        console.error("handleOffer:", e);
+    }
 }
 
-// Sends a streamId→kind map so the remote peer can classify incoming tracks
-function sendStreamMap() {
+function closePeer(peerId) {
+    const state = peerStates.get(peerId);
+    if (!state) return;
+    state.pc.onicecandidate = null;
+    state.pc.ontrack = null;
+    state.pc.oniceconnectionstatechange = null;
+    state.pc.onsignalingstatechange = null;
+    state.pc.close();
+    removePeerCam(peerId);
+    clearRemoteScreen(peerId);
+    peerStates.delete(peerId);
+}
+
+function sendStreamMapTo(peerId) {
     const map = {};
-    if (localStream)  map[localStream.id]  = "camera";
-    if (screenStream) map[screenStream.id] = "screen";
+    if (localCamStream)    map[localCamStream.id]    = "camera";
+    if (localScreenStream) map[localScreenStream.id] = "screen";
+    wsSend({ to: peerId, type: "streammap", map });
+}
+
+function broadcastStreamMap() {
+    const map = {};
+    if (localCamStream)    map[localCamStream.id]    = "camera";
+    if (localScreenStream) map[localScreenStream.id] = "screen";
     wsSend({ type: "streammap", map });
 }
 
-function clearRemoteMedia() {
-    setCamSrc("remote", null);
-    clearRemoteScreen();
-}
+// ── Local media ───────────────────────────────────────────────────────────────
+let localCamStream    = null;
+let localScreenStream = null;
+let micEnabled        = true;
 
-// ── Camera helpers ────────────────────────────────────────────
-function setCamSrc(side, stream) {
-    const vid = $(side === "local" ? "localCam" : "remoteCam");
-    const ph  = $(side === "local" ? "localCamPlaceholder" : "remoteCamPlaceholder");
-    if (vid) vid.srcObject = stream;
-    if (ph)  ph.classList.toggle("hidden", !!stream);
-}
-
-// ── Camera + Mic ──────────────────────────────────────────────
 async function toggleCamera() {
-    if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-        const localTracks = new Set(localStream.getTracks());
-        pc.getSenders()
-            .filter(s => s.track && localTracks.has(s.track))
-            .forEach(s => pc.removeTrack(s));
+    if (localCamStream) {
+        // Stop camera
+        localCamStream.getTracks().forEach(t => t.stop());
+        removeLocalTracksFromPeers(localCamStream);
         wsSend({ type: "camera-off" });
-        setCamSrc("local", null);
-        setBtn("btnCam", "🎥", "Camera", "bg-sky-700 hover:bg-sky-600 ring-sky-600/30");
-        localStream = null;
-        micEnabled  = true;
-        updateMicButton();
+        setLocalCamEl(null);
+        localCamStream = null;
+        micEnabled = true;
+        setState({ camActive: false, micActive: true });
         return;
     }
-
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        setCamSrc("local", localStream);
-        // Apply current mic state
-        localStream.getAudioTracks().forEach(t => (t.enabled = micEnabled));
-        localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
-        sendStreamMap();
-        await negotiate();
-        setBtn("btnCam", "🎥", "Stop Cam", "bg-sky-600 hover:bg-sky-500 ring-sky-500/30");
-        updateMicButton();
+        localCamStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localCamStream.getAudioTracks().forEach(t => (t.enabled = micEnabled));
+        setLocalCamEl(localCamStream);
+        addLocalTracksToPeers(localCamStream);
+        broadcastStreamMap();
+        setState({ camActive: true });
     } catch (e) {
-        showError("Could not access camera/mic. Check that your browser has permission and no other app is using the camera.");
+        showError("Could not access camera/mic. Check browser permissions.");
         console.error("Camera error:", e);
     }
 }
 
 function toggleMic() {
-    if (!localStream) return;
+    if (!localCamStream) return;
     micEnabled = !micEnabled;
-    localStream.getAudioTracks().forEach(t => (t.enabled = micEnabled));
-    updateMicButton();
+    localCamStream.getAudioTracks().forEach(t => (t.enabled = micEnabled));
+    setState({ micActive: micEnabled });
 }
 
-function updateMicButton() {
-    if (micEnabled || !localStream) {
-        setBtn("btnMic", "🎤", "Mic", "bg-slate-700 hover:bg-slate-600 ring-slate-600/30");
-    } else {
-        setBtn("btnMic", "🔇", "Unmute", "bg-red-700 hover:bg-red-600 ring-red-600/30");
-    }
-}
-
-// ── Screen Share ──────────────────────────────────────────────
 async function toggleScreenShare() {
-    if (screenStream) { stopScreenShare(); return; }
+    if (localScreenStream) { stopScreenShare(); return; }
     try {
-        screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        screenStream.getTracks().forEach(t => pc.addTrack(t, screenStream));
-        // Auto-stop when user ends share from browser UI
-        screenStream.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare);
-        sendStreamMap();
-        await negotiate();
-        setBtn("btnShare", "🖥️", "Stop Share", "bg-violet-600 hover:bg-violet-500 ring-violet-500/30");
+        localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        localScreenStream.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare);
+        addLocalTracksToPeers(localScreenStream);
+        broadcastStreamMap();
+        setState({ screenActive: true });
     } catch (e) {
         if (e.name !== "NotAllowedError") console.error("Screen share:", e);
     }
 }
 
 function stopScreenShare() {
-    if (!screenStream) return;
-    screenStream.getTracks().forEach(t => t.stop());
-    const screenTracks = new Set(screenStream.getTracks());
-    pc.getSenders()
-        .filter(s => s.track && screenTracks.has(s.track))
-        .forEach(s => pc.removeTrack(s));
+    if (!localScreenStream) return;
+    localScreenStream.getTracks().forEach(t => t.stop());
+    removeLocalTracksFromPeers(localScreenStream);
     wsSend({ type: "screen-off" });
-    screenStream = null;
-    setBtn("btnShare", "🖥️", "Screen", "bg-violet-700 hover:bg-violet-600 ring-violet-600/30");
+    localScreenStream = null;
+    setState({ screenActive: false });
 }
 
-// ── Remote screen display ─────────────────────────────────────
-function setRemoteScreen(stream) {
-    const v = $("remoteScreen");
+function addLocalTracksToPeers(stream) {
+    for (const [peerId, state] of peerStates) {
+        stream.getTracks().forEach(t => {
+            // Avoid adding duplicate senders
+            if (!state.pc.getSenders().some(s => s.track === t))
+                state.pc.addTrack(t, stream);
+        });
+    }
+    // Trigger renegotiation by re-offering to all peers
+    renegotiateAll();
+}
+
+function removeLocalTracksFromPeers(stream) {
+    const trackSet = new Set(stream.getTracks());
+    peerStates.forEach(({ pc }) => {
+        pc.getSenders()
+          .filter(s => s.track && trackSet.has(s.track))
+          .forEach(s => pc.removeTrack(s));
+    });
+    renegotiateAll();
+}
+
+async function renegotiateAll() {
+    for (const [peerId, state] of peerStates) {
+        await sendOffer(peerId, state);
+    }
+}
+
+// ── Remote camera tiles ───────────────────────────────────────────────────────
+function addPeerCamTile(peerId, state) {
+    const grid = document.getElementById("camGrid");
+    if (!grid) return;
+
+    const tile = document.createElement("div");
+    tile.id = `cam-tile-${peerId}`;
+    tile.className = "relative flex-none bg-slate-800 overflow-hidden cam-tile";
+
+    const vid = document.createElement("video");
+    vid.autoplay = true;
+    vid.playsInline = true;
+    vid.className = "absolute inset-0 w-full h-full object-cover";
+    vid.setAttribute("data-peer", peerId);
+
+    const ph = document.createElement("div");
+    ph.id = `cam-ph-${peerId}`;
+    ph.className = "cam-ph absolute inset-0";
+    ph.setAttribute("aria-label", "Remote camera inactive");
+    ph.innerHTML = "&#128100;";
+
+    const label = document.createElement("span");
+    label.className = "vid-label";
+    label.id = `cam-label-${peerId}`;
+    label.textContent = state.username;
+
+    tile.appendChild(vid);
+    tile.appendChild(ph);
+    tile.appendChild(label);
+
+    // Insert before the local cam tile
+    const localTile = document.getElementById("localCamTile");
+    if (localTile) grid.insertBefore(tile, localTile);
+    else grid.appendChild(tile);
+
+    state.camEl = vid;
+}
+
+function removePeerCam(peerId) {
+    const state = peerStates.get(peerId);
+    if (state?.camEl) {
+        state.camEl.srcObject = null;
+        state.camEl = null;
+    }
+    document.getElementById(`cam-tile-${peerId}`)?.remove();
+    const ph = document.getElementById(`cam-ph-${peerId}`);
+    if (ph) ph.classList.remove("hidden");
+}
+
+function setPeerCamStream(peerId, stream) {
+    const state = peerStates.get(peerId);
+    if (!state) return;
+    if (!state.camEl) addPeerCamTile(peerId, state);
+    state.camEl.srcObject = stream;
+    document.getElementById(`cam-ph-${peerId}`)?.classList.add("hidden");
+}
+
+function updatePeerLabel(peerId, name) {
+    const el = document.getElementById(`cam-label-${peerId}`);
+    if (el) el.textContent = name;
+}
+
+function setLocalCamEl(stream) {
+    const vid = document.getElementById("localCam");
+    const ph  = document.getElementById("localCamPh");
+    if (vid) vid.srcObject = stream;
+    if (ph) ph.classList.toggle("hidden", !!stream);
+}
+
+// ── Remote screen share ───────────────────────────────────────────────────────
+// Track which peer is currently sharing their screen (only one at a time shown)
+let activeScreenPeer = null;
+
+function setRemoteScreen(peerId, stream) {
+    activeScreenPeer = peerId;
+    const v = document.getElementById("remoteScreen");
+    if (!v) return;
     v.srcObject = stream;
     v.classList.remove("hidden");
-    $("stagePlaceholder").classList.add("hidden");
-    $("ytPlayerContainer").classList.add("hidden");
-    $("videoPlayer").classList.add("hidden");
-    currentVideoType = "screen";
+    hideVideoOverlays(["stagePlaceholder", "ytPlayerContainer", "videoPlayer"]);
+    setState({ videoType: "screen" });
 }
 
-function clearRemoteScreen() {
-    const v = $("remoteScreen");
-    v.srcObject = null;
-    v.classList.add("hidden");
-    if (currentVideoType === "screen") {
-        currentVideoType = null;
-        restoreVideoSource();
-    }
+function clearRemoteScreen(peerId) {
+    if (activeScreenPeer !== peerId) return;
+    activeScreenPeer = null;
+    const v = document.getElementById("remoteScreen");
+    if (v) { v.srcObject = null; v.classList.add("hidden"); }
+    restoreLocalVideo();
 }
 
-function restoreVideoSource() {
-    if (!currentVideoUrl) {
-        $("stagePlaceholder").classList.remove("hidden");
-        return;
-    }
-    if (getYouTubeId(currentVideoUrl)) {
-        $("ytPlayerContainer").classList.remove("hidden");
-        currentVideoType = "youtube";
+function hideVideoOverlays(ids) {
+    ids.forEach(id => document.getElementById(id)?.classList.add("hidden"));
+}
+
+function restoreLocalVideo() {
+    if (currentVideoUrl) {
+        const ytId = getYouTubeId(currentVideoUrl);
+        if (ytId) {
+            document.getElementById("ytPlayerContainer")?.classList.remove("hidden");
+            document.getElementById("stagePlaceholder")?.classList.add("hidden");
+            setState({ videoType: "youtube" });
+        } else {
+            document.getElementById("videoPlayer")?.classList.remove("hidden");
+            document.getElementById("stagePlaceholder")?.classList.add("hidden");
+            setState({ videoType: "html5" });
+        }
     } else {
-        $("videoPlayer").classList.remove("hidden");
-        currentVideoType = "html5";
+        document.getElementById("stagePlaceholder")?.classList.remove("hidden");
+        setState({ videoType: null });
     }
-    $("stagePlaceholder").classList.add("hidden");
 }
 
-// ── Video Sync ────────────────────────────────────────────────
+// ── Video sync ────────────────────────────────────────────────────────────────
+let ytPlayer         = null;
+let ytReady          = false;
+let currentVideoType = null;
+let currentVideoUrl  = "";
+let isApplyingSync   = false;
+let lastSyncSent     = 0;
+
 function getYouTubeId(url) {
     const m = url.match(
         /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([A-Za-z0-9_-]{11})/
@@ -356,7 +490,13 @@ function getYouTubeId(url) {
     return m?.[1] ?? null;
 }
 
-// Called when the local user enters a URL and hits Load
+function isSafeMediaUrl(url) {
+    try {
+        const p = new URL(url);
+        return p.protocol === "http:" || p.protocol === "https:";
+    } catch { return false; }
+}
+
 function loadVideoUrl(url) {
     url = url.trim();
     if (!url) return;
@@ -364,21 +504,24 @@ function loadVideoUrl(url) {
     const ytId = getYouTubeId(url);
     if (ytId) loadYouTube(ytId);
     else      loadHtml5Video(url);
-    // Broadcast the URL to all peers so they load the same content
     wsSend({ type: "sync", action: "load", url });
 }
 
 function loadYouTube(videoId) {
-    $("videoPlayer").classList.add("hidden");
-    if (!$("remoteScreen").srcObject) $("remoteScreen").classList.add("hidden");
-    $("stagePlaceholder").classList.add("hidden");
-    $("ytPlayerContainer").classList.remove("hidden");
+    // If a remote screen is active, don't hide it — load in background
+    if (activeScreenPeer === null) {
+        document.getElementById("videoPlayer")?.classList.add("hidden");
+        document.getElementById("remoteScreen")?.classList.add("hidden");
+        document.getElementById("stagePlaceholder")?.classList.add("hidden");
+        document.getElementById("ytPlayerContainer")?.classList.remove("hidden");
+    }
     currentVideoType = "youtube";
+    setState({ videoType: "youtube" });
 
     if (!ytReady) {
-        // API not loaded yet; store the ID and update UI now so the stage shows correctly
         window.__pendingYtVideoId = videoId;
-        $("ytPlayerContainer").innerHTML =
+        const c = document.getElementById("ytPlayerContainer");
+        if (c) c.innerHTML =
             '<div class="absolute inset-0 flex items-center justify-center text-slate-600 text-sm">Loading player…</div>';
         return;
     }
@@ -391,7 +534,9 @@ function loadYouTube(videoId) {
 
 function createYTPlayer(videoId) {
     if (ytPlayer) { ytPlayer.destroy(); ytPlayer = null; }
-    $("ytPlayerContainer").innerHTML = '<div id="ytPlayerEl"></div>';
+    const c = document.getElementById("ytPlayerContainer");
+    if (!c) return;
+    c.innerHTML = '<div id="ytPlayerEl"></div>';
     ytPlayer = new YT.Player("ytPlayerEl", {
         videoId,
         width: "100%",
@@ -404,36 +549,37 @@ function createYTPlayer(videoId) {
 function onYtStateChange({ data }) {
     if (isApplyingSync) return;
     const now = Date.now();
-    if (now - lastSyncSent < SYNC_THROTTLE_MS) return; // throttle
+    if (now - lastSyncSent < SYNC_THROTTLE_MS) return;
     lastSyncSent = now;
     const t = ytPlayer?.getCurrentTime?.() ?? 0;
-    if (data === YT.PlayerState.PLAYING) wsSend({ type: "sync", action: "play",  time: t });
+    if      (data === YT.PlayerState.PLAYING) wsSend({ type: "sync", action: "play",  time: t });
     else if (data === YT.PlayerState.PAUSED)  wsSend({ type: "sync", action: "pause", time: t });
 }
 
-// Validates that a URL is a safe http(s) resource before assigning to a media element
-function isSafeMediaUrl(url) {
-    try {
-        const parsed = new URL(url);
-        return parsed.protocol === "http:" || parsed.protocol === "https:";
-    } catch {
-        return false;
-    }
-}
-
 function loadHtml5Video(url) {
-    if (!isSafeMediaUrl(url)) {
+    // Parse and validate – re-serialise via URL so we assign a trusted string, not raw input.
+    let safeUrl;
+    try {
+        const p = new URL(url);
+        if (p.protocol !== "http:" && p.protocol !== "https:") throw new Error("unsafe-protocol");
+        safeUrl = p.href;
+    } catch {
         showError("Only http:// and https:// video URLs are supported.");
         return;
     }
-    $("ytPlayerContainer").classList.add("hidden");
-    if (!$("remoteScreen").srcObject) $("remoteScreen").classList.add("hidden");
-    $("stagePlaceholder").classList.add("hidden");
-    const v = $("videoPlayer");
-    v.src = url;
-    v.classList.remove("hidden");
-    v.play().catch(() => {});
+    if (activeScreenPeer === null) {
+        document.getElementById("ytPlayerContainer")?.classList.add("hidden");
+        document.getElementById("remoteScreen")?.classList.add("hidden");
+        document.getElementById("stagePlaceholder")?.classList.add("hidden");
+    }
     currentVideoType = "html5";
+    setState({ videoType: "html5" });
+
+    const v = document.getElementById("videoPlayer");
+    if (!v) return;
+    v.src = safeUrl;
+    if (activeScreenPeer === null) v.classList.remove("hidden");
+    v.play().catch(() => {});
 
     const maybeSend = (action) => {
         if (isApplyingSync) return;
@@ -442,7 +588,6 @@ function loadHtml5Video(url) {
         lastSyncSent = now;
         wsSend({ type: "sync", action, time: v.currentTime });
     };
-
     v.onplay   = () => maybeSend("play");
     v.onpause  = () => maybeSend("pause");
     v.onseeked = () => {
@@ -456,13 +601,11 @@ function loadHtml5Video(url) {
 
 function applyRemoteSync(msg) {
     if (msg.action === "load") {
-        // Validate the URL before trusting peer-provided content
         const url = typeof msg.url === "string" ? msg.url.trim() : "";
         if (!url) return;
         const ytId = getYouTubeId(url);
-        if (!ytId && !isSafeMediaUrl(url)) return; // reject unsafe URLs from peers
-        // Set the URL input, then load without re-broadcasting
-        $("urlInput").value = url;
+        if (!ytId && !isSafeMediaUrl(url)) return;
+        document.getElementById("urlInput").value = url;
         isApplyingSync = true;
         currentVideoUrl = url;
         try {
@@ -488,10 +631,11 @@ function applyRemoteSync(msg) {
                 ytPlayer.seekTo(msg.time, true);
             }
         } else if (currentVideoType === "html5") {
-            const v = $("videoPlayer");
+            const v = document.getElementById("videoPlayer");
+            if (!v) return;
             if (msg.action === "play") {
                 if (Math.abs(v.currentTime - msg.time) > SYNC_TOLERANCE_S) v.currentTime = msg.time;
-                v.play();
+                v.play().catch(() => {});
             } else if (msg.action === "pause") {
                 if (Math.abs(v.currentTime - msg.time) > SYNC_TOLERANCE_S) v.currentTime = msg.time;
                 v.pause();
@@ -500,28 +644,27 @@ function applyRemoteSync(msg) {
             }
         }
     } finally {
-        setTimeout(() => { isApplyingSync = false; }, 300);
+        // Keep guard active long enough that browser events fired by our own seek/play don't echo
+        setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
     }
 }
 
-// Called when a new peer joins — sends them the current video state
-function sendVideoState() {
+function sendVideoStateTo(peerId) {
     if (!currentVideoUrl) return;
-    wsSend({ type: "sync", action: "load", url: currentVideoUrl });
-    // Send play/pause + time after a brief delay to let the peer load the player
+    wsSend({ to: peerId, type: "sync", action: "load", url: currentVideoUrl });
     setTimeout(() => {
         if (currentVideoType === "youtube" && ytPlayer && ytReady) {
-            const t      = ytPlayer.getCurrentTime?.() ?? 0;
+            const t = ytPlayer.getCurrentTime?.() ?? 0;
             const paused = ytPlayer.getPlayerState?.() !== YT.PlayerState.PLAYING;
-            wsSend({ type: "sync", action: paused ? "pause" : "play", time: t });
+            wsSend({ to: peerId, type: "sync", action: paused ? "pause" : "play", time: t });
         } else if (currentVideoType === "html5") {
-            const v = $("videoPlayer");
-            wsSend({ type: "sync", action: v.paused ? "pause" : "play", time: v.currentTime });
+            const v = document.getElementById("videoPlayer");
+            if (v) wsSend({ to: peerId, type: "sync", action: v.paused ? "pause" : "play", time: v.currentTime });
         }
-    }, 1000);
+    }, SYNC_SHARE_DELAY_MS);
 }
 
-// ── Chat ──────────────────────────────────────────────────────
+// ── Chat ──────────────────────────────────────────────────────────────────────
 function sendChat(inputEl) {
     const text = inputEl.value.trim();
     if (!text) return;
@@ -533,54 +676,47 @@ function sendChat(inputEl) {
 
 function appendChatMessage(name, text, ts, isSelf) {
     const item = buildChatItem(name, text, ts, isSelf);
-    // Write to both desktop and mobile chat containers
     for (const id of ["chatMessages", "chatMessagesMobile"]) {
-        const el = $(id);
+        const el = document.getElementById(id);
         if (!el) continue;
         el.appendChild(item.cloneNode(true));
         el.scrollTop = el.scrollHeight;
     }
-    // Show unread badge on mobile when the drawer is closed
     if (!isSelf) {
-        const badge  = $("chatBadge");
-        const drawer = $("chatDrawer");
-        if (badge && drawer?.classList.contains("translate-y-full")) {
-            badge.classList.remove("hidden");
+        const app = getApp();
+        if (app) {
+            const badge = document.getElementById("chatBadge");
+            const drawer = document.getElementById("chatDrawer");
+            if (badge && drawer?.classList.contains("translate-y-full"))
+                badge.classList.remove("hidden");
+            app.unreadCount = (app.unreadCount ?? 0) + 1;
         }
     }
 }
 
 function buildChatItem(name, text, ts, isSelf) {
     const time = new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
     const div  = document.createElement("div");
     div.className = `flex flex-col ${isSelf ? "items-end" : "items-start"} gap-0.5`;
-    div.innerHTML =
-        `<span class="text-[10px] text-slate-500">${escapeHtml(name)} · ${time}</span>` +
-        `<div class="max-w-[90%] px-3 py-1.5 rounded-xl text-sm break-words ` +
-        (isSelf ? `bg-violet-700 text-white rounded-br-sm">`
-                : `bg-slate-800 text-slate-200 rounded-bl-sm">`) +
-        `${escapeHtml(text)}</div>`;
+
+    const meta = document.createElement("span");
+    meta.className = "text-[10px] text-slate-500";
+    meta.textContent = `${name} · ${time}`;
+
+    const bubble = document.createElement("div");
+    bubble.className =
+        "max-w-[90%] px-3 py-1.5 rounded-xl text-sm break-words " +
+        (isSelf ? "bg-violet-700 text-white rounded-br-sm"
+                : "bg-slate-800 text-slate-200 rounded-bl-sm");
+    bubble.textContent = text;
+
+    div.appendChild(meta);
+    div.appendChild(bubble);
     return div;
 }
 
-function escapeHtml(s) {
-    return s
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#39;");
-}
-
-// ── UI Helpers ────────────────────────────────────────────────
-function setBtn(id, icon, label, colorClasses) {
-    const btn = $(id);
-    if (!btn) return;
-    btn.className = `${BTN_BASE} ${colorClasses}`;
-    btn.innerHTML = `${icon} <span class="hidden sm:inline">${label}</span>`;
-}
-
-// Briefly shows an error toast instead of blocking alert()
+// ── UI helpers ────────────────────────────────────────────────────────────────
 function showError(message) {
     const toast = document.createElement("div");
     toast.className =
@@ -588,7 +724,7 @@ function showError(message) {
         "rounded-xl shadow-lg max-w-sm text-center pointer-events-none";
     toast.textContent = message;
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 4000);
+    setTimeout(() => toast.remove(), 5000);
 }
 
 function fallbackCopy(text) {
@@ -599,7 +735,7 @@ function fallbackCopy(text) {
     try { return document.execCommand("copy"); } finally { document.body.removeChild(ta); }
 }
 
-// ── YouTube IFrame API callback ───────────────────────────────
+// ── YouTube IFrame API callback ───────────────────────────────────────────────
 window.onYouTubeIframeAPIReady = function () {
     ytReady = true;
     if (window.__pendingYtVideoId) {
@@ -608,57 +744,54 @@ window.onYouTubeIframeAPIReady = function () {
     }
 };
 
-// ── Init ─────────────────────────────────────────────────────
-document.addEventListener("DOMContentLoaded", () => {
-    initWS();
-    initPC();
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+function initWebRTC() {
+    wsConnect();
 
-    // Set displayed name for local cam
-    const localLabel = $("localLabel");
+    const localLabel = document.getElementById("localLabel");
     if (localLabel) localLabel.textContent = USERNAME;
 
-    // Initialise placeholders
-    setCamSrc("local",  null);
-    setCamSrc("remote", null);
-
-    // ── Controls ─────────────────────────────────────────────
-    $("btnMic").addEventListener("click",   toggleMic);
-    $("btnCam").addEventListener("click",   toggleCamera);
-    $("btnShare").addEventListener("click", toggleScreenShare);
-
-    // ── Video URL ─────────────────────────────────────────────
-    $("btnLoad").addEventListener("click", () => loadVideoUrl($("urlInput").value));
-    $("urlInput").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") loadVideoUrl($("urlInput").value);
+    // URL bar
+    document.getElementById("btnLoad")?.addEventListener("click", () =>
+        loadVideoUrl(document.getElementById("urlInput")?.value ?? ""));
+    document.getElementById("urlInput")?.addEventListener("keydown", e => {
+        if (e.key === "Enter") loadVideoUrl(e.target.value);
     });
 
-    // ── Chat (desktop) ────────────────────────────────────────
-    $("btnSendChat").addEventListener("click", () => sendChat($("chatInput")));
-    $("chatInput").addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat($("chatInput")); }
+    // Chat (desktop)
+    document.getElementById("btnSendChat")?.addEventListener("click", () =>
+        sendChat(document.getElementById("chatInput")));
+    document.getElementById("chatInput")?.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(e.target); }
     });
 
-    // ── Chat (mobile drawer) ──────────────────────────────────
-    $("btnSendChatMobile").addEventListener("click", () => sendChat($("chatInputMobile")));
-    $("chatInputMobile").addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat($("chatInputMobile")); }
+    // Chat (mobile)
+    document.getElementById("btnSendChatMobile")?.addEventListener("click", () =>
+        sendChat(document.getElementById("chatInputMobile")));
+    document.getElementById("chatInputMobile")?.addEventListener("keydown", e => {
+        if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(e.target); }
     });
 
-    const chatDrawer = $("chatDrawer");
-    $("btnChat").addEventListener("click", () => {
-        const isOpen = !chatDrawer.classList.contains("translate-y-full");
-        chatDrawer.classList.toggle("translate-y-full", isOpen);
-        if (!isOpen) $("chatBadge").classList.add("hidden");
+    // Mobile chat drawer
+    document.getElementById("btnChat")?.addEventListener("click", () => {
+        const drawer = document.getElementById("chatDrawer");
+        const isOpen = !drawer.classList.contains("translate-y-full");
+        drawer.classList.toggle("translate-y-full", isOpen);
+        if (!isOpen) {
+            document.getElementById("chatBadge")?.classList.add("hidden");
+            const app = getApp();
+            if (app) app.unreadCount = 0;
+        }
     });
-    $("btnCloseChat").addEventListener("click", () => {
-        chatDrawer.classList.add("translate-y-full");
+    document.getElementById("btnCloseChat")?.addEventListener("click", () => {
+        document.getElementById("chatDrawer")?.classList.add("translate-y-full");
     });
 
-    // ── Copy room link ────────────────────────────────────────
-    $("btnCopyLink").addEventListener("click", () => {
-        const btn   = $("btnCopyLink");
+    // Copy room link
+    document.getElementById("btnCopyLink")?.addEventListener("click", () => {
+        const btn = document.getElementById("btnCopyLink");
         const reset = () => setTimeout(() => (btn.textContent = "📋"), 1600);
-        const url   = location.href;
+        const url = location.href;
         if (navigator.clipboard?.writeText) {
             navigator.clipboard.writeText(url)
                 .then(() => { btn.textContent = "✅"; reset(); })
@@ -668,5 +801,10 @@ document.addEventListener("DOMContentLoaded", () => {
             reset();
         }
     });
-});
+
+    // Expose actions to Alpine
+    window.rtcActions = { toggleMic, toggleCamera, toggleScreenShare };
+}
+
+document.addEventListener("DOMContentLoaded", initWebRTC);
 
