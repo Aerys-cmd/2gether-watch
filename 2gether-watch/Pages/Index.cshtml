@@ -93,7 +93,7 @@
             <div class="space-y-2">
                 <div class="flex gap-2">
                     <input id="roomIdInput" type="text" placeholder="Enter room ID…"
-                        autocomplete="off" spellcheck="false"
+                        autocomplete="off" spellcheck="false" maxlength="64"
                         class="input-glow flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white
                                placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-all
                                font-mono text-sm" />
@@ -146,9 +146,10 @@
         // ── Room helpers ───────────────────────────────────────────────
         function generateRoomId() {
             if (typeof crypto !== "undefined" && crypto.randomUUID) {
-                return crypto.randomUUID().split("-")[0];
+                // Strip dashes and take 12 hex chars → 48-bit of UUID randomness.
+                return crypto.randomUUID().replace(/-/g, "").slice(0, 12);
             }
-            return Math.random().toString(36).substring(2, 9);
+            return Math.random().toString(36).substring(2, 14);
         }
 
         document.getElementById("btnCreate").addEventListener("click", () => {
@@ -156,7 +157,7 @@
             window.location.href = "/room/" + generateRoomId();
         });
 
-        const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]+$/;
+        const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
         document.getElementById("btnJoin").addEventListener("click", () => {
             const id = document.getElementById("roomIdInput").value.trim();

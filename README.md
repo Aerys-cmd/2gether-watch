@@ -115,7 +115,7 @@ dotnet run --project 2gether-watch/2gether-watch.csproj
 dotnet test 2gether-watch.Tests/2gether-watch.Tests.csproj
 ```
 
-The app will be available at `https://localhost:7000` (or whichever port `launchSettings.json` configures).
+The app will be available at `https://localhost:7120` / `http://localhost:5021` (as configured in `Properties/launchSettings.json`).
 
 > **Note**: WebRTC camera/microphone access requires HTTPS. For local development the dev certificate is enough.
 
@@ -129,4 +129,4 @@ Pull requests are welcome! Please open an issue first for significant changes.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) if present, or contact the repository owner.
+MIT — see [LICENSE](LICENSE).
