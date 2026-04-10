@@ -210,8 +210,9 @@
                 &#128172;
             </button>
             <span id="chatBadge"
-                class="hidden absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full
+                class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full
                        text-[9px] flex items-center justify-center font-bold"
+                style="display:none"
                 x-show="unreadCount > 0"
                 x-text="unreadCount > maxUnreadBadge ? maxUnreadBadge + '+' : unreadCount"></span>
         </div>

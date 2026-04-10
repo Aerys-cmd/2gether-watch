@@ -77,20 +77,29 @@ public class RoomManager
 
             // ── Step 2: admit or reject ────────────────────────────────────
             string[] existingIds;
+            bool roomFull;
             lock (_lock)
             {
                 var room = _rooms.GetOrAdd(roomId, _ => new Dictionary<string, WebSocket>());
-
-                if (room.Count >= MaxRoomSize)
+                roomFull = room.Count >= MaxRoomSize;
+                if (!roomFull)
                 {
-                    // Reject without adding
-                    _ = RejectFullRoomAsync(socket);
-                    return;
+                    peerId = GeneratePeerId();
+                    existingIds = [.. room.Keys];
+                    room[peerId] = socket;
                 }
+                else
+                {
+                    existingIds = [];
+                }
+            }
 
-                peerId = GeneratePeerId();
-                existingIds = [.. room.Keys];
-                room[peerId] = socket;
+            if (roomFull)
+            {
+                // Send the rejection message and close before returning so the caller
+                // (which may be inside a using-scoped socket) receives it deterministically.
+                await RejectFullRoomAsync(socket);
+                return;
             }
 
             _logger.LogInformation("Peer {PeerId} joined room {RoomId} ({Count} existing)", peerId, roomId, existingIds.Length);
@@ -100,7 +109,7 @@ public class RoomManager
             await SendToAsync(socket, $"peers:{string.Join(',', existingIds)}");
 
             // ── Step 4: notify existing peers ─────────────────────────────
-            await BroadcastRawAsync(roomId, peerId, $"peer-joined:{peerId}");
+            await BroadcastRawAsync(roomId, peerId!, $"peer-joined:{peerId}");
 
             // ── Step 5: relay loop ─────────────────────────────────────────
             while (socket.State == WebSocketState.Open)
@@ -108,7 +117,7 @@ public class RoomManager
                 var msg = await ReceiveFullMessageAsync(socket, buffer);
                 if (msg is null) break;
 
-                await RelayMessageAsync(roomId, peerId, msg);
+                await RelayMessageAsync(roomId, peerId!, msg);
             }
         }
         catch (WebSocketException ex)
@@ -132,8 +141,10 @@ public class RoomManager
     {
         if (!message.StartsWith('{'))
         {
-            // Non-JSON – broadcast as-is (shouldn't normally happen after join)
-            await BroadcastRawAsync(roomId, fromPeerId, message);
+            // After join, clients may only send JSON relay payloads.
+            // Drop raw text so peers cannot spoof server control frames such as
+            // "peer-left:" or "peer-joined:".
+            _logger.LogDebug("Dropped non-JSON message from {PeerId}", fromPeerId);
             return;
         }
 

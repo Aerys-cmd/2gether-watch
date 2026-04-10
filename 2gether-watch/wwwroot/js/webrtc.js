@@ -381,7 +381,7 @@ function addPeerCamTile(peerId, state) {
     ph.id = `cam-ph-${peerId}`;
     ph.className = "cam-ph absolute inset-0";
     ph.setAttribute("aria-label", "Remote camera inactive");
-    ph.innerHTML = "&#128100;";
+    ph.textContent = "👤";
 
     const label = document.createElement("span");
     label.className = "vid-label";
@@ -687,9 +687,11 @@ function appendChatMessage(name, text, ts, isSelf) {
         if (app) {
             const badge = document.getElementById("chatBadge");
             const drawer = document.getElementById("chatDrawer");
-            if (badge && drawer?.classList.contains("translate-y-full"))
+            const isDrawerClosed = !drawer || drawer.classList.contains("translate-y-full");
+            if (badge && isDrawerClosed)
                 badge.classList.remove("hidden");
-            app.unreadCount = (app.unreadCount ?? 0) + 1;
+            if (isDrawerClosed)
+                app.unreadCount = (app.unreadCount ?? 0) + 1;
         }
     }
 }
