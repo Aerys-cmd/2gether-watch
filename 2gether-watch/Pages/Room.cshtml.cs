@@ -1,3 +1,4 @@
+using _2gether_watch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 
@@ -9,7 +10,7 @@ public class RoomModel : PageModel
 
     public IActionResult OnGet(string? id)
     {
-        if (string.IsNullOrWhiteSpace(id))
+        if (string.IsNullOrWhiteSpace(id) || !RoomValidation.RoomIdPattern().IsMatch(id))
             return RedirectToPage("/Index");
 
         RoomId = id;

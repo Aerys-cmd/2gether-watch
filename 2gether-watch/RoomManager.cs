@@ -73,7 +73,14 @@ public class RoomManager
             if (handshake is null || !handshake.StartsWith("join:")) return;
 
             roomId = handshake[5..];
-            if (string.IsNullOrWhiteSpace(roomId)) return;
+            if (string.IsNullOrWhiteSpace(roomId) || !RoomValidation.RoomIdPattern().IsMatch(roomId))
+            {
+                await socket.CloseAsync(
+                    WebSocketCloseStatus.PolicyViolation,
+                    "Invalid room ID.",
+                    CancellationToken.None);
+                return;
+            }
 
             // ── Step 2: admit or reject ────────────────────────────────────
             string[] existingIds;
