@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace _2gether_watch;
 
@@ -31,6 +32,8 @@ public class RoomManager
     // for rooms of at most 10 peers with short-lived sessions.
     private const int PeerIdLength = 12;
     private const int MaxMessageBytes = 64 * 1024; // 64 KB
+    // Must match the client-side pattern and Room.cshtml.cs validation.
+    private static readonly Regex RoomIdPattern = new(@"^[A-Za-z0-9_-]{1,64}$", RegexOptions.Compiled);
 
     // roomId → (peerId → WebSocket)
     private readonly ConcurrentDictionary<string, Dictionary<string, WebSocket>> _rooms = new();
@@ -73,7 +76,7 @@ public class RoomManager
             if (handshake is null || !handshake.StartsWith("join:")) return;
 
             roomId = handshake[5..];
-            if (string.IsNullOrWhiteSpace(roomId)) return;
+            if (string.IsNullOrWhiteSpace(roomId) || !RoomIdPattern.IsMatch(roomId)) return;
 
             // ── Step 2: admit or reject ────────────────────────────────────
             string[] existingIds;
