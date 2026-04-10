@@ -9,11 +9,14 @@
 
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>2gether Watch — Room @Model.RoomId</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
+        /* --footer-h is referenced by both the footer and the mobile chat drawer */
+        :root { --footer-h: 3.5rem; }
+
         body { height: 100dvh; }
         @@supports not (height: 100dvh) { body { height: 100vh; } }
 
@@ -46,6 +49,26 @@
         /* Camera tile */
         .cam-tile { height: 7rem; }
         @@media (min-width: 1024px) { .cam-tile { height: 7rem; width: 100%; } }
+        /* Compact camera tiles in landscape on mobile/tablet (4.5rem ≈ 72px saves ~40px vs 7rem, keeping footer visible) */
+        @@media (orientation: landscape) and (max-width: 1023px) { .cam-tile { height: 4.5rem; } }
+
+        /* Safe-area padding for page chrome — keeps content clear of the notch in all orientations.
+           max() ensures we keep at least the Tailwind base padding even when the inset is 0. */
+        header {
+            padding-top: env(safe-area-inset-top, 0rem);
+            padding-left: max(0.75rem, env(safe-area-inset-left, 0rem)) !important;
+            padding-right: max(0.75rem, env(safe-area-inset-right, 0rem)) !important;
+        }
+        #urlBar, footer {
+            padding-left: max(0.75rem, env(safe-area-inset-left, 0rem)) !important;
+            padding-right: max(0.75rem, env(safe-area-inset-right, 0rem)) !important;
+        }
+        @@media (min-width: 640px) {
+            header, footer {
+                padding-left: max(1.25rem, env(safe-area-inset-left, 0rem)) !important;
+                padding-right: max(1.25rem, env(safe-area-inset-right, 0rem)) !important;
+            }
+        }
 
         /* Camera placeholder */
         .cam-ph {
@@ -61,7 +84,7 @@
       x-init="init()">
 
     <!-- Header -->
-    <header class="flex-none flex items-center gap-3 px-3 sm:px-5 h-11 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 z-20">
+    <header class="flex-none flex items-center gap-3 px-3 sm:px-5 min-h-11 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 z-20">
         <a href="/" class="font-bold text-sm text-white/80 hover:text-white transition shrink-0">
             <span class="text-violet-400">2g</span>Watch
         </a>
@@ -83,7 +106,7 @@
     </header>
 
     <!-- URL Bar -->
-    <div class="flex-none flex gap-2 px-3 py-2 bg-slate-900/60 border-b border-white/5 z-10">
+    <div id="urlBar" class="flex-none flex gap-2 px-3 py-2 bg-slate-900/60 border-b border-white/5 z-10">
         <input id="urlInput" type="text"
             placeholder="Paste a YouTube or video URL to watch together…"
             class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
@@ -115,11 +138,11 @@
 
         <!--
             Right / bottom panel: webcams + chat
-            Mobile  : flex-row, h-28 strip at the bottom
+            Mobile  : flex-row strip at the bottom (height controlled by .cam-tile CSS)
             Desktop : flex-col, w-72 sidebar on the right
         -->
         <div class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-white/5 lg:border-t-0 lg:border-l
-                    h-28 lg:h-auto lg:w-72">
+                    lg:w-72">
 
             <!-- Camera tiles — scrollable strip (mobile: horizontal, desktop: vertical) -->
             <div id="camGrid"
@@ -156,8 +179,9 @@
 
     <!-- Mobile Chat Drawer -->
     <div id="chatDrawer"
-        class="lg:hidden fixed inset-x-0 bottom-14 h-72 bg-slate-900 border-t border-white/10
-               flex flex-col z-30 transition-transform duration-200 translate-y-full shadow-2xl">
+        class="lg:hidden fixed inset-x-0 h-72 bg-slate-900 border-t border-white/10
+               flex flex-col z-30 transition-transform duration-200 translate-y-full shadow-2xl"
+        style="bottom: calc(var(--footer-h) + env(safe-area-inset-bottom, 0px));">
         <div class="flex items-center justify-between px-3 py-2 border-b border-white/5 shrink-0">
             <span class="text-xs text-slate-400 font-medium">&#128172; Chat</span>
             <button id="btnCloseChat" class="text-slate-500 hover:text-white text-sm p-1 leading-none">&#10005;</button>
@@ -175,7 +199,8 @@
     </div>
 
     <!-- Footer Controls -->
-    <footer class="flex-none flex items-center gap-2 px-3 sm:px-5 h-14 bg-slate-900/95 backdrop-blur-sm border-t border-white/5 z-20">
+    <footer class="flex-none flex items-center gap-2 px-3 sm:px-5 bg-slate-900/95 backdrop-blur-sm border-t border-white/5 z-20"
+            style="min-height: var(--footer-h); padding-bottom: env(safe-area-inset-bottom, 0px);">
 
         <button @@click="$rtc.toggleMic()"
             class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
