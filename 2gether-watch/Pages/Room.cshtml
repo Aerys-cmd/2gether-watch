@@ -71,7 +71,8 @@
         <div class="h-4 w-px bg-white/10 shrink-0"></div>
         <div class="flex items-center gap-1.5 min-w-0">
             <span class="text-xs text-slate-500 hidden sm:inline shrink-0">Room:</span>
-            <code class="text-xs font-mono text-slate-300 bg-white/5 px-2 py-0.5 rounded truncate max-w-[100px] sm:max-w-none">@Model.RoomId</code>
+            <code class="text-xs font-mono text-slate-300 bg-white/5 px-2 py-0.5 rounded truncate max-w-[100px] sm:max-w-none"
+                aria-label="Room ID: @Model.RoomId">@Model.RoomId</code>
             <button id="btnCopyLink"
                 class="shrink-0 p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded transition text-sm"
                 title="Copy invite link">📋</button>
@@ -129,7 +130,7 @@
                 <div class="relative flex-1 lg:flex-none lg:h-24 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
                     <video id="remoteCam" autoplay playsinline
                         class="absolute inset-0 w-full h-full object-cover"></video>
-                    <div id="remoteCamPlaceholder" class="cam-ph absolute inset-0">&#128100;</div>
+                    <div id="remoteCamPlaceholder" class="cam-ph absolute inset-0" aria-label="Remote camera inactive" role="img">&#128100;</div>
                     <span class="vid-label" id="remoteLabel">Other</span>
                 </div>
 
@@ -139,7 +140,7 @@
                 <div class="relative flex-1 lg:flex-none lg:h-24 bg-slate-800 min-w-0 min-h-0 overflow-hidden">
                     <video id="localCam" autoplay playsinline muted
                         class="absolute inset-0 w-full h-full object-cover -scale-x-100"></video>
-                    <div id="localCamPlaceholder" class="cam-ph absolute inset-0">&#127910;</div>
+                    <div id="localCamPlaceholder" class="cam-ph absolute inset-0" aria-label="Local camera inactive" role="img">&#127910;</div>
                     <span class="vid-label" id="localLabel">You</span>
                 </div>
 

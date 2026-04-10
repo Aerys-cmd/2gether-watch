@@ -240,8 +240,9 @@ function setCamSrc(side, stream) {
 async function toggleCamera() {
     if (localStream) {
         localStream.getTracks().forEach(t => t.stop());
+        const localTracks = new Set(localStream.getTracks());
         pc.getSenders()
-            .filter(s => s.track && localStream.getTracks().includes(s.track))
+            .filter(s => s.track && localTracks.has(s.track))
             .forEach(s => pc.removeTrack(s));
         wsSend({ type: "camera-off" });
         setCamSrc("local", null);
@@ -302,8 +303,9 @@ async function toggleScreenShare() {
 function stopScreenShare() {
     if (!screenStream) return;
     screenStream.getTracks().forEach(t => t.stop());
+    const screenTracks = new Set(screenStream.getTracks());
     pc.getSenders()
-        .filter(s => s.track && screenStream.getTracks().includes(s.track))
+        .filter(s => s.track && screenTracks.has(s.track))
         .forEach(s => pc.removeTrack(s));
     wsSend({ type: "screen-off" });
     screenStream = null;
@@ -374,7 +376,10 @@ function loadYouTube(videoId) {
     currentVideoType = "youtube";
 
     if (!ytReady) {
+        // API not loaded yet; store the ID and update UI now so the stage shows correctly
         window.__pendingYtVideoId = videoId;
+        $("ytPlayerContainer").innerHTML =
+            '<div class="absolute inset-0 flex items-center justify-center text-slate-600 text-sm">Loading player…</div>';
         return;
     }
     if (ytPlayer) {
@@ -460,9 +465,12 @@ function applyRemoteSync(msg) {
         $("urlInput").value = url;
         isApplyingSync = true;
         currentVideoUrl = url;
-        if (ytId) loadYouTube(ytId);
-        else      loadHtml5Video(url);
-        setTimeout(() => { isApplyingSync = false; }, SYNC_THROTTLE_MS);
+        try {
+            if (ytId) loadYouTube(ytId);
+            else      loadHtml5Video(url);
+        } finally {
+            setTimeout(() => { isApplyingSync = false; }, SYNC_THROTTLE_MS);
+        }
         return;
     }
 
