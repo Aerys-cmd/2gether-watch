@@ -52,6 +52,24 @@
         /* Compact camera tiles in landscape on mobile/tablet (4.5rem ≈ 72px saves ~40px vs 7rem, keeping footer visible) */
         @@media (orientation: landscape) and (max-width: 1023px) { .cam-tile { height: 4.5rem; } }
 
+        /* Safe-area padding for page chrome — keeps content clear of the notch in all orientations.
+           max() ensures we keep at least the Tailwind base padding even when the inset is 0. */
+        header {
+            padding-top: env(safe-area-inset-top, 0rem);
+            padding-left: max(0.75rem, env(safe-area-inset-left, 0rem)) !important;
+            padding-right: max(0.75rem, env(safe-area-inset-right, 0rem)) !important;
+        }
+        #urlBar, footer {
+            padding-left: max(0.75rem, env(safe-area-inset-left, 0rem)) !important;
+            padding-right: max(0.75rem, env(safe-area-inset-right, 0rem)) !important;
+        }
+        @@media (min-width: 640px) {
+            header, footer {
+                padding-left: max(1.25rem, env(safe-area-inset-left, 0rem)) !important;
+                padding-right: max(1.25rem, env(safe-area-inset-right, 0rem)) !important;
+            }
+        }
+
         /* Camera placeholder */
         .cam-ph {
             display: flex; align-items: center; justify-content: center;
@@ -66,7 +84,7 @@
       x-init="init()">
 
     <!-- Header -->
-    <header class="flex-none flex items-center gap-3 px-3 sm:px-5 h-11 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 z-20">
+    <header class="flex-none flex items-center gap-3 px-3 sm:px-5 min-h-11 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 z-20">
         <a href="/" class="font-bold text-sm text-white/80 hover:text-white transition shrink-0">
             <span class="text-violet-400">2g</span>Watch
         </a>
@@ -88,7 +106,7 @@
     </header>
 
     <!-- URL Bar -->
-    <div class="flex-none flex gap-2 px-3 py-2 bg-slate-900/60 border-b border-white/5 z-10">
+    <div id="urlBar" class="flex-none flex gap-2 px-3 py-2 bg-slate-900/60 border-b border-white/5 z-10">
         <input id="urlInput" type="text"
             placeholder="Paste a YouTube or video URL to watch together…"
             class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
