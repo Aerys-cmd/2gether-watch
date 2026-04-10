@@ -200,9 +200,11 @@
         // dot in sync by observing class changes on the main dot.
         const mainDot   = document.getElementById("statusDot");
         const mobileDot = document.getElementById("statusDotMobile");
+        const DOT_COLORS = ["bg-amber-400", "bg-green-400", "bg-red-400"];
         const dotObserver = new MutationObserver(() => {
-            mobileDot.className = mainDot.className.replace("status-pulse", "").trim()
-                + " status-pulse";
+            DOT_COLORS.forEach(cls => mobileDot.classList.remove(cls));
+            const active = DOT_COLORS.find(cls => mainDot.classList.contains(cls));
+            if (active) mobileDot.classList.add(active);
         });
         dotObserver.observe(mainDot, { attributes: true, attributeFilter: ["class"] });
     </script>
