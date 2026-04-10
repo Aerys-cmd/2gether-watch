@@ -31,15 +31,24 @@ public class RoomManager
                 {
                     roomId = msg[5..];
 
+                    int existingPeerCount;
                     lock (_lock)
                     {
                         var room = _rooms.GetOrAdd(roomId, _ => new HashSet<WebSocket>());
+                        existingPeerCount = room.Count;
                         room.Add(socket);
                     }
 
-                    _logger.LogInformation("Socket joined room {RoomId}", roomId);
+                    _logger.LogInformation("Socket joined room {RoomId} ({Count} existing peer(s))", roomId, existingPeerCount);
 
-                    // Notify existing peers that someone joined
+                    // If there were already peers in the room, tell the new joiner so their
+                    // UI reflects that someone is already present.
+                    if (existingPeerCount > 0)
+                    {
+                        await SendToAsync(socket, "join:" + roomId);
+                    }
+
+                    // Notify existing peers that someone new joined
                     await BroadcastAsync(roomId, socket, "join:" + roomId);
                     continue;
                 }
@@ -106,6 +115,13 @@ public class RoomManager
                 }
             }
         }
+    }
+
+    private static async Task SendToAsync(WebSocket socket, string message)
+    {
+        if (socket.State != WebSocketState.Open) return;
+        var bytes = Encoding.UTF8.GetBytes(message);
+        await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
     }
 
     private async Task BroadcastAsync(string roomId, WebSocket sender, string message)

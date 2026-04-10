@@ -10,50 +10,117 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>2gether Watch</title>
+    <title>2gether Watch — Watch Together in Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @@keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50%       { transform: translateY(-10px); }
+        }
+        @@keyframes blob {
+            0%, 100% { transform: scale(1) translate(0, 0); }
+            33%       { transform: scale(1.1) translate(3%, -4%); }
+            66%       { transform: scale(0.95) translate(-3%, 3%); }
+        }
+        .float    { animation: float 4s ease-in-out infinite; }
+        .blob     { animation: blob 8s ease-in-out infinite; }
+        .blob-d   { animation: blob 10s ease-in-out infinite reverse; }
+        .gradient-text {
+            background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .glass {
+            background: rgba(255,255,255,0.03);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255,255,255,0.07);
+        }
+        .input-glow:focus {
+            box-shadow: 0 0 0 2px rgba(139,92,246,0.4);
+        }
+    </style>
 </head>
 
-<body class="min-h-screen bg-gray-900 text-white flex items-center justify-center p-6">
-    <div class="max-w-md w-full space-y-8 text-center">
+<body class="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4 overflow-x-hidden">
 
-        <!-- Title -->
-        <div>
-            <h1 class="text-5xl font-bold tracking-tight">
-                2gether<span class="text-purple-400">·</span>Watch
+    <!-- Ambient blobs -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
+        <div class="blob absolute -top-32 -left-32 w-96 h-96 rounded-full bg-violet-700/20 blur-3xl"></div>
+        <div class="blob-d absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-blue-700/20 blur-3xl"></div>
+        <div class="blob absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-fuchsia-800/10 blur-3xl"></div>
+    </div>
+
+    <div class="relative z-10 w-full max-w-sm sm:max-w-md">
+
+        <!-- Hero -->
+        <div class="text-center mb-8 select-none">
+            <div class="float inline-block text-6xl mb-4">🎬</div>
+            <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight leading-tight">
+                <span class="gradient-text">2gether</span><span class="text-white">Watch</span>
             </h1>
-            <p class="mt-3 text-gray-400 text-lg">Watch together, in sync, from anywhere.</p>
+            <p class="mt-3 text-slate-400 text-sm sm:text-base">Watch together, in sync, from anywhere.</p>
         </div>
 
-        <!-- Create Room -->
-        <button id="btnCreate"
-            class="w-full py-4 bg-purple-600 hover:bg-purple-700 rounded-xl text-xl font-semibold shadow-lg transition">
-            🎬 Create a Room
-        </button>
+        <!-- Card -->
+        <div class="glass rounded-2xl p-6 sm:p-8 space-y-5 shadow-2xl">
 
-        <!-- Divider -->
-        <div class="flex items-center space-x-4">
-            <hr class="flex-1 border-gray-700" />
-            <span class="text-gray-500 text-sm whitespace-nowrap">or join an existing room</span>
-            <hr class="flex-1 border-gray-700" />
-        </div>
-
-        <!-- Join Room -->
-        <div class="flex space-x-2">
-            <input id="roomIdInput" type="text" placeholder="Enter room ID…" autocomplete="off"
-                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition" />
-            <button id="btnJoin"
-                class="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold transition">
-                Join
+            <!-- Create Room -->
+            <button id="btnCreate"
+                class="w-full py-3.5 rounded-xl text-base font-semibold transition-all duration-150 active:scale-[0.97] shadow-lg
+                       bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500
+                       ring-1 ring-violet-500/30">
+                ✨ Create a New Room
             </button>
+
+            <!-- Divider -->
+            <div class="flex items-center gap-3">
+                <div class="flex-1 h-px bg-white/8"></div>
+                <span class="text-slate-500 text-xs shrink-0">or join an existing room</span>
+                <div class="flex-1 h-px bg-white/8"></div>
+            </div>
+
+            <!-- Join Room -->
+            <div class="space-y-2">
+                <div class="flex gap-2">
+                    <input id="roomIdInput" type="text" placeholder="Enter room ID…"
+                        autocomplete="off" spellcheck="false"
+                        class="input-glow flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white
+                               placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-all
+                               font-mono text-sm" />
+                    <button id="btnJoin"
+                        class="px-5 py-3 bg-sky-600 hover:bg-sky-500 active:scale-[0.97] rounded-xl font-semibold
+                               text-sm transition-all duration-150 shrink-0 ring-1 ring-sky-500/30 shadow">
+                        Join →
+                    </button>
+                </div>
+                <p id="errMsg" class="hidden text-red-400 text-xs flex items-center gap-1 pl-1">
+                    ⚠&nbsp;<span id="errText">Please enter a room ID.</span>
+                </p>
+            </div>
         </div>
 
-        <p id="errMsg" class="text-red-400 text-sm hidden">Please enter a room ID.</p>
+        <!-- Feature pills -->
+        <div class="mt-5 grid grid-cols-3 gap-2 text-center">
+            <div class="glass rounded-xl py-3 px-2">
+                <div class="text-xl mb-1">🔒</div>
+                <div class="text-[11px] text-slate-500">Private</div>
+            </div>
+            <div class="glass rounded-xl py-3 px-2">
+                <div class="text-xl mb-1">⚡</div>
+                <div class="text-[11px] text-slate-500">Real-time</div>
+            </div>
+            <div class="glass rounded-xl py-3 px-2">
+                <div class="text-xl mb-1">🖥️</div>
+                <div class="text-[11px] text-slate-500">Screen Share</div>
+            </div>
+        </div>
+
+        <p class="mt-5 text-center text-slate-700 text-xs">No sign-up required. Free forever.</p>
     </div>
 
     <script>
         function generateRoomId() {
-            // crypto.randomUUID() gives a UUID; take the first segment for brevity
             if (typeof crypto !== "undefined" && crypto.randomUUID) {
                 return crypto.randomUUID().split("-")[0];
             }
@@ -68,22 +135,26 @@
 
         document.getElementById("btnJoin").addEventListener("click", () => {
             const id = document.getElementById("roomIdInput").value.trim();
-            const errMsg = document.getElementById("errMsg");
+            const errMsg  = document.getElementById("errMsg");
+            const errText = document.getElementById("errText");
             if (!id) {
-                errMsg.textContent = "Please enter a room ID.";
+                errText.textContent = "Please enter a room ID.";
                 errMsg.classList.remove("hidden");
                 return;
             }
             if (!ROOM_ID_PATTERN.test(id)) {
-                errMsg.textContent = "Room ID may only contain letters, numbers, hyphens and underscores.";
+                errText.textContent = "Room ID may only contain letters, numbers, hyphens and underscores.";
                 errMsg.classList.remove("hidden");
                 return;
             }
             window.location.href = "/room/" + id;
         });
 
-        document.getElementById("roomIdInput").addEventListener("keydown", e => {
+        document.getElementById("roomIdInput").addEventListener("input", () => {
             document.getElementById("errMsg").classList.add("hidden");
+        });
+
+        document.getElementById("roomIdInput").addEventListener("keydown", e => {
             if (e.key === "Enter") document.getElementById("btnJoin").click();
         });
     </script>
