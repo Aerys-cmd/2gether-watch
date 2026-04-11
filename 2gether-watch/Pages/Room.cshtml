@@ -139,8 +139,10 @@
             <div id="ytPlayerContainer" class="hidden absolute inset-0"></div>
             <!-- HTML5 video (direct URL) -->
             <video id="videoPlayer" class="hidden absolute inset-0 w-full h-full object-contain" controls></video>
-            <!-- Remote screen share -->
-            <video id="remoteScreen" autoplay playsinline class="hidden absolute inset-0 w-full h-full object-contain"></video>
+            <!-- Remote screen share — optimised for low-latency WebRTC playback -->
+            <video id="remoteScreen" autoplay playsinline muted disablepictureinpicture
+                   style="pointer-events: auto;"
+                   class="hidden absolute inset-0 w-full h-full object-contain"></video>
             <!-- Empty-stage placeholder -->
             <div id="stagePlaceholder"
                 class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
