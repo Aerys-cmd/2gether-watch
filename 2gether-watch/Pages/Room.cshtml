@@ -228,7 +228,7 @@
         </button>
 
         <button @@click="$rtc.toggleScreenShare()"
-            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
+            class="hidden sm:flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
                    transition-all active:scale-95 shadow-sm ring-1"
             :class="screenActive ? 'bg-violet-600 hover:bg-violet-500 ring-violet-500/30' : 'bg-violet-700 hover:bg-violet-600 ring-violet-600/30'"
             :title="screenActive ? 'Stop screen share' : 'Share screen'">
