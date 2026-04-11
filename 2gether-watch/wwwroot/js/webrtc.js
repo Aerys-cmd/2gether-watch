@@ -1056,6 +1056,17 @@ function initWebRTC() {
         document.getElementById("chatDrawer")?.classList.add("chat-drawer-closed");
     });
 
+    // Landscape header chat button — same behaviour as the portrait footer button
+    document.getElementById("btnChatLandscape")?.addEventListener("click", () => {
+        const drawer = document.getElementById("chatDrawer");
+        const isOpen = !drawer.classList.contains("chat-drawer-closed");
+        drawer.classList.toggle("chat-drawer-closed", isOpen);
+        if (!isOpen) {
+            const app = getApp();
+            if (app) app.unreadCount = 0;
+        }
+    });
+
     // Copy room link
     document.getElementById("btnCopyLink")?.addEventListener("click", () => {
         const btn = document.getElementById("btnCopyLink");

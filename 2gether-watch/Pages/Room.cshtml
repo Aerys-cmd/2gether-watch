@@ -54,11 +54,77 @@
             background: rgba(255,255,255,0.1); border-radius: 2px;
         }
 
-        /* Camera tile */
+        /* Camera tile — base sizes */
         .cam-tile { height: 7rem; }
         @@media (min-width: 1024px) { .cam-tile { height: 7rem; width: 100%; } }
-        /* Compact camera tiles in landscape on mobile/tablet (4.5rem ≈ 72px saves ~40px vs 7rem, keeping footer visible) */
-        @@media (orientation: landscape) and (max-width: 1023px) { .cam-tile { height: 4.5rem; } }
+
+        /* ── Mobile / touch-device overrides ─────────────────────────────────
+           Mobile browsers cannot load arbitrary video URLs and do not support
+           getDisplayMedia, so hide both the URL bar and the screen-share button.
+           (hover:none) + (pointer:coarse) reliably targets touch devices
+           regardless of screen orientation or viewport width. */
+        @@media (hover: none) and (pointer: coarse) {
+            #urlBar         { display: none !important; }
+            #btnScreenShare { display: none !important; }
+        }
+
+        /* ── Landscape on phones / small tablets (width < 1024 px) ─────────
+           Footer is completely hidden — its controls move into the header.
+           Cameras shift to a 22 % right sidebar.
+           Video stage fills ~85 % of screen height on a typical phone. */
+        @@media (orientation: landscape) and (max-width: 1023px) {
+            /* Footer gone — drawer anchors to very bottom of screen */
+            :root  { --footer-h: 0px; }
+            footer { display: none !important; }
+
+            /* Header: taller to comfortably fit the touch buttons (≥ 44 px) */
+            header { min-height: 3rem !important; }
+
+            /* Reveal the landscape control strip inside the header */
+            #landscapeControls { display: flex !important; }
+
+            /* Hide the verbose status text — just keep the status dot */
+            #statusText { display: none !important; }
+
+            /* Main: switch from column to row so cameras sit on the right */
+            main { flex-direction: row !important; }
+
+            /* Camera sidebar: right side, 22 % of viewport width */
+            #camSidebar {
+                flex-direction: column !important;
+                width: 22% !important;
+                flex-shrink: 0 !important;
+                border-top: none !important;
+                border-left: 1px solid rgba(255,255,255,0.05) !important;
+                overflow: hidden;
+            }
+
+            /* Camera grid: fills full sidebar height, scrolls vertically */
+            #camGrid {
+                display: flex !important;
+                flex-direction: column !important;
+                overflow-x: hidden !important;
+                overflow-y: auto !important;
+                flex: 1 1 auto !important;
+                border-bottom: none !important;
+                max-height: 100% !important;
+            }
+
+            /* Camera tiles: fill sidebar width with a 4:3 aspect ratio */
+            .cam-tile {
+                height: auto !important;
+                width: 100% !important;
+                aspect-ratio: 4 / 3;
+                flex-shrink: 0;
+            }
+        }
+
+        /* Helper classes: show different content on desktop vs. mobile */
+        .mobile-hint { display: none; }
+        @@media (hover: none) and (pointer: coarse) {
+            .desktop-hint { display: none; }
+            .mobile-hint  { display: block; }
+        }
 
         /* Safe-area padding for page chrome — keeps content clear of the notch in all orientations.
            max() ensures we keep at least the Tailwind base padding even when the inset is 0. */
@@ -111,10 +177,43 @@
                 title="Copy invite link">📋</button>
         </div>
         <div class="flex-1"></div>
+
+        <!-- Landscape controls: compact icon buttons shown only in mobile landscape via CSS -->
+        <div id="landscapeControls" class="flex items-center gap-1.5 shrink-0" style="display: none;">
+            <button @@click="$rtc.toggleMic()"
+                class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 transition-all active:scale-95"
+                :class="micActive ? 'bg-slate-700 ring-slate-600/30' : 'bg-red-700 ring-red-600/30'"
+                :title="micActive ? 'Mute microphone' : 'Unmute microphone'">
+                <span x-text="micActive ? '🎤' : '🔇'"></span>
+            </button>
+            <button @@click="$rtc.toggleCamera()"
+                class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 transition-all active:scale-95"
+                :class="camActive ? 'bg-sky-600 ring-sky-500/30' : 'bg-sky-700 ring-sky-600/30'"
+                :title="camActive ? 'Stop camera' : 'Start camera'">
+                &#127909;
+            </button>
+            <div class="relative">
+                <button id="btnChatLandscape"
+                    class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 bg-slate-700 ring-slate-600/30 transition-all active:scale-95"
+                    title="Chat">
+                    &#128172;
+                </button>
+                <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center font-bold pointer-events-none"
+                    x-show="unreadCount > 0"
+                    x-text="unreadCount > maxUnreadBadge ? maxUnreadBadge + '+' : unreadCount"
+                    style="display: none;"></span>
+            </div>
+            <a href="/"
+                class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 bg-red-700/80 ring-red-600/30 transition-all active:scale-95"
+                title="Leave room">
+                &#128682;
+            </a>
+        </div>
+
         <div class="flex items-center gap-1.5 shrink-0">
             <span class="status-pulse w-2 h-2 rounded-full shrink-0"
                   :class="{ 'bg-green-400': statusColor==='green', 'bg-amber-400': statusColor==='amber', 'bg-red-400': statusColor==='red' }"></span>
-            <span class="text-xs text-slate-400 hidden sm:inline truncate max-w-[200px]" x-text="status"></span>
+            <span id="statusText" class="text-xs text-slate-400 hidden sm:inline truncate max-w-[200px]" x-text="status"></span>
         </div>
     </header>
 
@@ -147,7 +246,8 @@
             <div id="stagePlaceholder"
                 class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
                 <span class="text-6xl sm:text-8xl opacity-10">&#127916;</span>
-                <p class="text-xs sm:text-sm text-slate-700 mt-3">Paste a URL above or share your screen</p>
+                <p class="text-xs sm:text-sm text-slate-700 mt-3 desktop-hint">Paste a URL above or share your screen</p>
+                <p class="text-xs sm:text-sm text-slate-700 mt-3 mobile-hint">Waiting for a video or screen share to begin…</p>
             </div>
         </div>
 
@@ -156,7 +256,7 @@
             Mobile  : flex-row strip at the bottom (height controlled by .cam-tile CSS)
             Desktop : flex-col, w-72 sidebar on the right
         -->
-        <div class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-white/5 lg:border-t-0 lg:border-l
+        <div id="camSidebar" class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-white/5 lg:border-t-0 lg:border-l
                     lg:w-72">
 
             <!-- Camera tiles — scrollable strip (mobile: horizontal, desktop: vertical) -->
@@ -234,7 +334,8 @@
             &#127909; <span class="hidden sm:inline" x-text="camActive ? 'Stop Cam' : 'Camera'"></span>
         </button>
 
-        <button @@click="$rtc.toggleScreenShare()"
+        <button id="btnScreenShare"
+            @@click="$rtc.toggleScreenShare()"
             class="hidden sm:flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
                    transition-all active:scale-95 shadow-sm ring-1"
             :class="screenActive ? 'bg-violet-600 hover:bg-violet-500 ring-violet-500/30' : 'bg-violet-700 hover:bg-violet-600 ring-violet-600/30'"
