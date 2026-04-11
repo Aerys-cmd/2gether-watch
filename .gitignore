@@ -45,6 +45,9 @@ publish/
 # Frontend tooling
 node_modules/
 
+# Playwright test artifacts
+frontend-tests/test-results/
+
 # macOS metadata
 .DS_Store
 
