@@ -261,7 +261,23 @@ function createPC(peerId) {
 
     // Add existing local tracks to the new PC
     if (localCamStream) localCamStream.getTracks().forEach(t => pc.addTrack(t, localCamStream));
-    if (localScreenStream) localScreenStream.getTracks().forEach(t => pc.addTrack(t, localScreenStream));
+    if (localScreenStream) {
+        localScreenStream.getTracks().forEach(t => pc.addTrack(t, localScreenStream));
+        // Apply quality encodings for the screen track on this new connection.
+        const screenTrack = localScreenStream.getVideoTracks()[0];
+        if (screenTrack) {
+            const sender = pc.getSenders().find(s => s.track === screenTrack);
+            if (sender) {
+                const params = sender.getParameters();
+                if (!params.encodings?.length) params.encodings = [{}];
+                params.encodings.forEach(enc => {
+                    enc.maxBitrate = 2_500_000;
+                    enc.priority   = "high";
+                });
+                sender.setParameters(params).catch(err => console.warn("Screen share: failed to set encoding params:", err));
+            }
+        }
+    }
 
     return pc;
 }
@@ -408,8 +424,16 @@ async function toggleScreenShare() {
     if (localScreenStream) { stopScreenShare(); return; }
     try {
         localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        localScreenStream.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare);
+        const videoTrack = localScreenStream.getVideoTracks()[0];
+        if (videoTrack) {
+            // Prefer sharpness (text/UI clarity) over smooth motion.
+            videoTrack.contentHint = "detail";
+            // Lower frame rate → more bits per frame → sharper image at same bandwidth.
+            videoTrack.applyConstraints({ frameRate: { ideal: 15, max: 30 } }).catch(err => console.warn("Screen share: failed to apply frame rate constraints:", err));
+            videoTrack.addEventListener("ended", stopScreenShare);
+        }
         addLocalTracksToPeers(localScreenStream);
+        applyScreenEncodings();
         broadcastStreamMap();
         setState({ screenActive: true });
     } catch (e) {
@@ -446,6 +470,26 @@ function removeLocalTracksFromPeers(stream) {
           .forEach(s => pc.removeTrack(s));
         requestRenegotiation(peerId, state);
     });
+}
+
+// Apply high-quality encoding parameters to every sender carrying the screen-share
+// video track. Called after tracks are added to peers and again when a new peer joins
+// while a screen share is already active.
+function applyScreenEncodings() {
+    if (!localScreenStream) return;
+    const screenTrack = localScreenStream.getVideoTracks()[0];
+    if (!screenTrack) return;
+    for (const [, state] of peerStates) {
+        const sender = state.pc.getSenders().find(s => s.track === screenTrack);
+        if (!sender) continue;
+        const params = sender.getParameters();
+        if (!params.encodings?.length) params.encodings = [{}];
+        params.encodings.forEach(enc => {
+            enc.maxBitrate = 2_500_000; // 2.5 Mbps — enough for crisp 1080p screen share
+            enc.priority   = "high";
+        });
+        sender.setParameters(params).catch(err => console.warn("Screen share: failed to set encoding params:", err));
+    }
 }
 
 // ── Remote camera tiles ───────────────────────────────────────────────────────
