@@ -22,11 +22,8 @@ const APPLY_SYNC_GUARD_MS    = 600;
 // Delay before pushing our own video state to a newly joined peer, to give
 // their player time to initialise before receiving play/pause commands.
 const SYNC_SHARE_DELAY_MS    = 1200;
-// Maximum number of unread chat notifications to display in the badge.
-const MAX_UNREAD_BADGE_COUNT = 9;
 // Screen-share RTP encoding parameters.
 const SCREEN_MAX_BITRATE_BPS   = 20_000_000; // 20 Mbps — crisp 1080p@60fps with headroom for detail
-const SCREEN_START_BITRATE_BPS = 10_000_000; // 10 Mbps — high initial bitrate to avoid blurry ramp-up
 const SCREEN_MAX_FRAMERATE     = 60;         // allow up to 60 fps for fluid motion
 const SCREEN_ENCODING_PRIORITY = "high";
 
@@ -709,7 +706,6 @@ function setRemoteScreen(peerId, stream) {
     requestMediaPlayback(v);
     v.classList.remove("hidden");
     hideVideoOverlays(["stagePlaceholder", "ytPlayerContainer", "videoPlayer"]);
-    setState({ videoType: "screen" });
 }
 
 function clearRemoteScreen(peerId) {
@@ -730,15 +726,12 @@ function restoreLocalVideo() {
         if (ytId) {
             document.getElementById("ytPlayerContainer")?.classList.remove("hidden");
             document.getElementById("stagePlaceholder")?.classList.add("hidden");
-            setState({ videoType: "youtube" });
         } else {
             document.getElementById("videoPlayer")?.classList.remove("hidden");
             document.getElementById("stagePlaceholder")?.classList.add("hidden");
-            setState({ videoType: "html5" });
         }
     } else {
         document.getElementById("stagePlaceholder")?.classList.remove("hidden");
-        setState({ videoType: null });
     }
 }
 
@@ -783,7 +776,6 @@ function loadYouTube(videoId) {
         document.getElementById("ytPlayerContainer")?.classList.remove("hidden");
     }
     currentVideoType = "youtube";
-    setState({ videoType: "youtube" });
 
     if (!ytReady) {
         window.__pendingYtVideoId = videoId;
@@ -840,7 +832,6 @@ function loadHtml5Video(url) {
         document.getElementById("stagePlaceholder")?.classList.add("hidden");
     }
     currentVideoType = "html5";
-    setState({ videoType: "html5" });
 
     const v = document.getElementById("videoPlayer");
     if (!v) return;

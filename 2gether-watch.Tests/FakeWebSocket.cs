@@ -18,8 +18,6 @@ public sealed class FakeWebSocket : WebSocket
     private FakeWebSocket? _partner;
     private WebSocketState _state = WebSocketState.Open;
 
-    /// <summary>All messages sent BY this socket (i.e., written by the server/manager).</summary>
-    public List<string> Sent { get; } = [];
 
     private FakeWebSocket(Channel<ArraySegment<byte>> recvQueue)
     {
@@ -110,8 +108,6 @@ public sealed class FakeWebSocket : WebSocket
         bool endOfMessage,
         CancellationToken ct)
     {
-        var text = Encoding.UTF8.GetString(buffer.Array!, buffer.Offset, buffer.Count);
-        Sent.Add(text);
 
         // Route the data to the partner's receive queue (what the partner's ReceiveAsync will read)
         if (_partner != null)

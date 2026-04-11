@@ -1,5 +1,4 @@
 using System.Net.WebSockets;
-using System.Text;
 using _2gether_watch;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 
