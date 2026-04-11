@@ -413,29 +413,27 @@ function toggleMic() {
 async function toggleScreenShare() {
     if (localScreenStream) { stopScreenShare(); return; }
     try {
-        localScreenStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-                frameRate: { ideal: 30, max: 30 },
-                width:     { ideal: 1920 },
-                height:    { ideal: 1080 },
-            },
-            // Request audio as a simple boolean so the browser can decide whether to
-            // offer system audio.  Audio-quality constraints are applied post-capture
-            // via applyConstraints() to avoid crashing headless/CI environments that
-            // don't support specific constraints inside getDisplayMedia.
-            audio: true,
-        });
+        // Use simple boolean flags so the browser's display-capture picker decides
+        // the resolution/framerate.  Passing a constraints object here can crash the
+        // renderer in headless/CI Chrome (chromium-headless-shell) even with ideal-only
+        // constraints, while real capture quality is primarily governed by the encoder
+        // hints and bitrate limits applied below.
+        localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
         const videoTrack = localScreenStream.getVideoTracks()[0];
         if (videoTrack) {
             // Hint to the encoder that this is detailed screen/text content (not motion),
             // so it preserves sharpness rather than applying motion-smoothing compression.
             videoTrack.contentHint = "detail";
             videoTrack.addEventListener("ended", stopScreenShare);
+            // Best-effort: nudge the capture resolution/framerate post-capture.
+            // applyConstraints() is safe even if the browser ignores the request.
+            videoTrack.applyConstraints({
+                frameRate: { ideal: 30, max: 30 },
+                width:     { ideal: 1920 },
+                height:    { ideal: 1080 },
+            }).catch(() => {});
         }
         // Best-effort: apply audio quality hints on the display-capture audio track.
-        // applyConstraints() is safer than passing constraints directly to getDisplayMedia
-        // because some environments (headless Chrome, Firefox) don't honour display-capture
-        // audio constraints at call time and may throw or crash.
         const audioTrack = localScreenStream.getAudioTracks()[0];
         if (audioTrack) {
             audioTrack.applyConstraints({
