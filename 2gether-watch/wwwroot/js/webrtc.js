@@ -419,11 +419,11 @@ async function toggleScreenShare() {
                 width:     { ideal: 1920 },
                 height:    { ideal: 1080 },
             },
-            audio: {
-                echoCancellation: { ideal: false },
-                noiseSuppression: { ideal: false },
-                sampleRate:       { ideal: 48000 },
-            },
+            // Request audio as a simple boolean so the browser can decide whether to
+            // offer system audio.  Audio-quality constraints are applied post-capture
+            // via applyConstraints() to avoid crashing headless/CI environments that
+            // don't support specific constraints inside getDisplayMedia.
+            audio: true,
         });
         const videoTrack = localScreenStream.getVideoTracks()[0];
         if (videoTrack) {
@@ -431,6 +431,18 @@ async function toggleScreenShare() {
             // so it preserves sharpness rather than applying motion-smoothing compression.
             videoTrack.contentHint = "detail";
             videoTrack.addEventListener("ended", stopScreenShare);
+        }
+        // Best-effort: apply audio quality hints on the display-capture audio track.
+        // applyConstraints() is safer than passing constraints directly to getDisplayMedia
+        // because some environments (headless Chrome, Firefox) don't honour display-capture
+        // audio constraints at call time and may throw or crash.
+        const audioTrack = localScreenStream.getAudioTracks()[0];
+        if (audioTrack) {
+            audioTrack.applyConstraints({
+                echoCancellation: false,
+                noiseSuppression: false,
+                sampleRate: 48000,
+            }).catch(() => {});
         }
         addLocalTracksToPeers(localScreenStream);
         broadcastStreamMap();
