@@ -1,9 +1,14 @@
 using System.Net.WebSockets;
 using System.Text;
 using _2gether_watch;
+using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 
 
 var builder = WebApplication.CreateBuilder(args);
+
+// When the app runs from source (for example via dotnet run or test harnesses),
+// explicitly enable static web assets so JS/CSS from wwwroot are resolved.
+StaticWebAssetsLoader.UseStaticWebAssets(builder.Environment, builder.Configuration);
 
 
 // Add services to the container.
