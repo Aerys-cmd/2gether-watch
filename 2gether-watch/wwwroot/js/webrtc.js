@@ -258,6 +258,10 @@ function createPC(peerId) {
             if (state.needsNegotiation) {
                 void trySendPendingOffer(peerId, state);
             }
+            // Re-apply screen-share encoding whenever negotiation settles.  This
+            // ensures peers who join while screen share is already active receive
+            // the same higher-quality encoding constraints as the original peers.
+            if (localScreenStream) void applyScreenShareEncoding();
         }
     };
 
@@ -416,9 +420,9 @@ async function toggleScreenShare() {
                 height:    { ideal: 1080 },
             },
             audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                sampleRate:       48000,
+                echoCancellation: { ideal: false },
+                noiseSuppression: { ideal: false },
+                sampleRate:       { ideal: 48000 },
             },
         });
         const videoTrack = localScreenStream.getVideoTracks()[0];
@@ -460,13 +464,14 @@ async function applyScreenShareEncoding() {
         if (!sender) continue;
         try {
             const params = sender.getParameters();
-            if (params.encodings?.length) {
-                params.encodings.forEach(enc => {
-                    enc.maxBitrate   = SCREEN_SHARE_MAX_BITRATE; // 4 Mbps — preserves detail for 1080p screens
-                    enc.maxFramerate = 30;
-                });
-                await sender.setParameters(params);
+            if (!params.encodings?.length) {
+                params.encodings = [{}];
             }
+            params.encodings.forEach(enc => {
+                enc.maxBitrate   = SCREEN_SHARE_MAX_BITRATE; // 4 Mbps — preserves detail for 1080p screens
+                enc.maxFramerate = 30;
+            });
+            await sender.setParameters(params);
         } catch (e) {
             console.warn("applyScreenShareEncoding:", e);
         }
