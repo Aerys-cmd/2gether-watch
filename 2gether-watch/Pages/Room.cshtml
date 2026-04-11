@@ -29,10 +29,10 @@
         @@supports not (height: 100dvh) { body { height: 100vh; } }
 
         .vid-label {
-            position: absolute; bottom: 6px; left: 8px;
-            font-size: 10px; line-height: 1;
-            color: rgba(255,255,255,0.55); background: rgba(0,0,0,0.45);
-            padding: 2px 6px; border-radius: 4px;
+            position: absolute; bottom: 4px; left: 6px;
+            font-size: 9px; line-height: 1;
+            color: rgba(255,255,255,0.5); background: rgba(0,0,0,0.55);
+            padding: 2px 5px;
             pointer-events: none; user-select: none;
         }
 
@@ -45,13 +45,13 @@
         /* Chat scrollbar */
         #chatMessages, #chatMessagesMobile {
             scrollbar-width: thin;
-            scrollbar-color: rgba(255,255,255,0.1) transparent;
+            scrollbar-color: rgba(148,163,184,0.12) transparent;
         }
         #chatMessages::-webkit-scrollbar,
         #chatMessagesMobile::-webkit-scrollbar { width: 4px; }
         #chatMessages::-webkit-scrollbar-thumb,
         #chatMessagesMobile::-webkit-scrollbar-thumb {
-            background: rgba(255,255,255,0.1); border-radius: 2px;
+            background: rgba(148,163,184,0.12);
         }
 
         /* Camera tile — base sizes */
@@ -95,7 +95,7 @@
                 width: 22% !important;
                 flex-shrink: 0 !important;
                 border-top: none !important;
-                border-left: 1px solid rgba(255,255,255,0.05) !important;
+                border-left: 1px solid rgba(30, 41, 59, 0.8) !important;
                 overflow: hidden;
             }
 
@@ -148,7 +148,7 @@
         .cam-ph {
             display: flex; align-items: center; justify-content: center;
             width: 100%; height: 100%;
-            background: #0f172a; color: rgba(255,255,255,0.12); font-size: 1.75rem;
+            background: #0f172a; color: rgba(148,163,184,0.15); font-size: 1.5rem;
         }
 
         /* Keep drawer fully off-screen when closed, even though it's anchored above the footer. */
@@ -163,68 +163,73 @@
       x-init="init()">
 
     <!-- Header -->
-    <header class="flex-none flex items-center gap-3 px-3 sm:px-5 min-h-11 bg-slate-900/95 backdrop-blur-sm border-b border-white/5 z-20">
-        <a href="/" class="font-bold text-sm text-white/80 hover:text-white transition shrink-0">
-            <span class="text-violet-400">2g</span>Watch
+    <header class="flex-none flex items-center gap-2 px-3 sm:px-5 h-10 bg-slate-900 border-b border-slate-800 z-20">
+        <a href="/" class="font-bold text-sm text-white hover:text-indigo-300 transition-colors duration-150 shrink-0 tracking-tight">
+            <span class="text-indigo-400">2g</span>Watch
         </a>
-        <div class="h-4 w-px bg-white/10 shrink-0"></div>
+        <div class="h-3.5 w-px bg-slate-700/50 shrink-0"></div>
         <div class="flex items-center gap-1.5 min-w-0">
-            <span class="text-xs text-slate-500 hidden sm:inline shrink-0">Room:</span>
-            <code class="text-xs font-mono text-slate-300 bg-white/5 px-2 py-0.5 rounded truncate max-w-[100px] sm:max-w-none"
+            <span class="text-[10px] text-slate-500 uppercase tracking-wider hidden sm:inline shrink-0">Room</span>
+            <code class="text-xs font-mono text-slate-200 bg-slate-800 border border-slate-700 px-2 py-0.5 truncate max-w-[100px] sm:max-w-none"
                 aria-label="Room ID: @Model.RoomId">@Model.RoomId</code>
             <button id="btnCopyLink"
-                class="shrink-0 p-1 text-slate-400 hover:text-white hover:bg-white/5 rounded transition text-sm"
-                title="Copy invite link">📋</button>
+                class="shrink-0 h-6 w-6 flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-slate-700 border border-transparent hover:border-slate-600 transition-colors duration-150"
+                title="Copy invite link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" stroke-linejoin="miter">
+                    <rect x="9" y="9" width="13" height="13" rx="0"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
         </div>
         <div class="flex-1"></div>
 
         <!-- Landscape controls: compact icon buttons shown only in mobile landscape via CSS -->
-        <div id="landscapeControls" class="flex items-center gap-1.5 shrink-0" style="display: none;">
+        <div id="landscapeControls" class="flex items-center gap-1 shrink-0" style="display: none;">
             <button @@click="$rtc.toggleMic()"
-                class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 transition-all active:scale-95"
-                :class="micActive ? 'bg-slate-700 ring-slate-600/30' : 'bg-red-700 ring-red-600/30'"
+                class="h-8 w-8 flex items-center justify-center text-sm border transition-colors duration-150"
+                :class="micActive ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-red-900 border-red-700 text-red-300'"
                 :title="micActive ? 'Mute microphone' : 'Unmute microphone'">
                 <span x-text="micActive ? '🎤' : '🔇'"></span>
             </button>
             <button @@click="$rtc.toggleCamera()"
-                class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 transition-all active:scale-95"
-                :class="camActive ? 'bg-sky-600 ring-sky-500/30' : 'bg-sky-700 ring-sky-600/30'"
+                class="h-8 w-8 flex items-center justify-center text-sm border transition-colors duration-150"
+                :class="camActive ? 'bg-sky-800 border-sky-700 text-sky-200' : 'bg-slate-700 border-slate-600 text-slate-400'"
                 :title="camActive ? 'Stop camera' : 'Start camera'">
                 &#127909;
             </button>
             <div class="relative">
                 <button id="btnChatLandscape"
-                    class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 bg-slate-700 ring-slate-600/30 transition-all active:scale-95"
+                    class="h-8 w-8 flex items-center justify-center text-sm border bg-slate-700 border-slate-600 text-slate-300 hover:text-white hover:bg-slate-600 transition-colors duration-150"
                     title="Chat">
                     &#128172;
                 </button>
-                <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[9px] flex items-center justify-center font-bold pointer-events-none"
+                <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 text-[8px] flex items-center justify-center font-bold pointer-events-none"
                     x-show="unreadCount > 0"
                     x-text="unreadCount > maxUnreadBadge ? maxUnreadBadge + '+' : unreadCount"
                     style="display: none;"></span>
             </div>
             <a href="/"
-                class="w-9 h-9 flex items-center justify-center rounded-full text-base ring-1 bg-red-700/80 ring-red-600/30 transition-all active:scale-95"
+                class="h-8 w-8 flex items-center justify-center text-sm border bg-red-900 border-red-700 text-red-300 hover:bg-red-800 transition-colors duration-150"
                 title="Leave room">
                 &#128682;
             </a>
         </div>
 
         <div class="flex items-center gap-1.5 shrink-0">
-            <span class="status-pulse w-2 h-2 rounded-full shrink-0"
+            <span class="status-pulse w-1.5 h-1.5 shrink-0"
                   :class="{ 'bg-green-400': statusColor==='green', 'bg-amber-400': statusColor==='amber', 'bg-red-400': statusColor==='red' }"></span>
             <span id="statusText" class="text-xs text-slate-400 hidden sm:inline truncate max-w-[200px]" x-text="status"></span>
         </div>
     </header>
 
     <!-- URL Bar -->
-    <div id="urlBar" class="flex-none flex gap-2 px-3 py-2 bg-slate-900/60 border-b border-white/5 z-10">
+    <div id="urlBar" class="flex-none flex items-center px-3 py-1.5 bg-slate-900 border-b border-slate-800 z-10 gap-0">
         <input id="urlInput" type="text"
             placeholder="Paste a YouTube or video URL to watch together…"
-            class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
-                   placeholder-slate-600 focus:outline-none focus:border-violet-500 transition min-w-0" />
+            class="flex-1 h-8 text-xs bg-slate-800 border border-slate-700 border-r-0 px-3 text-slate-100
+                   placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors duration-150 min-w-0" />
         <button id="btnLoad"
-            class="shrink-0 px-4 py-1.5 bg-violet-700 hover:bg-violet-600 active:scale-95 rounded-lg text-sm font-medium transition">
+            class="shrink-0 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 border border-indigo-600 hover:border-indigo-500 text-xs font-medium transition-colors duration-150 whitespace-nowrap">
             ▶ Load
         </button>
     </div>
@@ -245,9 +250,11 @@
             <!-- Empty-stage placeholder -->
             <div id="stagePlaceholder"
                 class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                <span class="text-6xl sm:text-8xl opacity-10">&#127916;</span>
-                <p class="text-xs sm:text-sm text-slate-700 mt-3 desktop-hint">Paste a URL above or share your screen</p>
-                <p class="text-xs sm:text-sm text-slate-700 mt-3 mobile-hint">Waiting for a video or screen share to begin…</p>
+                <div class="border border-slate-800 bg-slate-950/60 p-6 flex flex-col items-center gap-2.5">
+                    <span class="text-5xl opacity-20">&#127916;</span>
+                    <p class="text-xs text-slate-500 text-center desktop-hint leading-relaxed">Paste a video URL above or share your screen<br/>to start watching together</p>
+                    <p class="text-xs text-slate-500 text-center mobile-hint">Waiting for video or screen share…</p>
+                </div>
             </div>
         </div>
 
@@ -256,13 +263,12 @@
             Mobile  : flex-row strip at the bottom (height controlled by .cam-tile CSS)
             Desktop : flex-col, w-72 sidebar on the right
         -->
-        <div id="camSidebar" class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-white/5 lg:border-t-0 lg:border-l
-                    lg:w-72">
+        <div id="camSidebar" class="flex-none flex flex-row lg:flex-col bg-slate-900 border-t border-slate-800 lg:border-t-0 lg:border-l lg:w-72">
 
             <!-- Camera tiles — scrollable strip (mobile: horizontal, desktop: vertical) -->
             <div id="camGrid"
                  class="flex flex-row lg:flex-col flex-none overflow-x-auto lg:overflow-x-hidden overflow-y-hidden lg:overflow-y-auto
-                        border-b border-white/5 lg:max-h-72">
+                        border-b border-slate-800 lg:max-h-72">
 
                 <!-- Local cam tile (always present) -->
                 <div id="localCamTile" class="relative flex-none bg-slate-800 overflow-hidden cam-tile w-28 lg:w-full shrink-0">
@@ -276,14 +282,17 @@
 
             <!-- Chat panel (desktop only; mobile uses the drawer below) -->
             <div class="hidden lg:flex flex-1 flex-col min-h-0">
-                <div class="px-3 py-2 border-b border-white/5 text-xs text-slate-400 font-medium select-none">&#128172; Chat</div>
-                <div id="chatMessages" class="flex-1 overflow-y-auto px-3 py-2 space-y-2"></div>
-                <div class="flex gap-2 p-2 border-t border-white/5">
-                    <input id="chatInput" type="text" placeholder="Say something…" maxlength="500" autocomplete="off"
-                        class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
-                               placeholder-slate-600 focus:outline-none focus:border-violet-500 transition min-w-0" />
+                <div class="px-3 py-1.5 border-b border-slate-800 flex items-center justify-between shrink-0 border-l-2 border-l-indigo-500">
+                    <span class="text-[10px] text-slate-300 uppercase tracking-wider font-medium">Chat</span>
+                    <span class="text-[10px] text-slate-500" x-text="peerCount > 0 ? (peerCount + 1) + ' in room' : '1 in room'"></span>
+                </div>
+                <div id="chatMessages" class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"></div>
+                <div class="flex border-t border-slate-800">
+                    <input id="chatInput" type="text" placeholder="Message…" maxlength="500" autocomplete="off"
+                        class="flex-1 h-8 text-xs bg-slate-800 border-0 px-3 text-slate-100
+                               placeholder-slate-500 focus:outline-none focus:bg-slate-700 transition-colors duration-150 min-w-0" />
                     <button id="btnSendChat"
-                        class="shrink-0 px-3 py-1.5 bg-violet-700 hover:bg-violet-600 active:scale-95 rounded-lg text-sm transition">
+                        class="shrink-0 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 text-xs transition-colors duration-150 border-l border-slate-700">
                         &#10148;
                     </button>
                 </div>
@@ -294,51 +303,48 @@
 
     <!-- Mobile Chat Drawer -->
     <div id="chatDrawer"
-        class="lg:hidden fixed inset-x-0 h-72 bg-slate-900 border-t border-white/10
-               flex flex-col z-30 transition-transform duration-200 chat-drawer-closed shadow-2xl"
+        class="lg:hidden fixed inset-x-0 h-72 bg-slate-900 border-t border-slate-800
+               flex flex-col z-30 transition-transform duration-150 chat-drawer-closed"
         style="bottom: calc(var(--footer-h) + env(safe-area-inset-bottom, 0px));">
-        <div class="flex items-center justify-between px-3 py-2 border-b border-white/5 shrink-0">
-            <span class="text-xs text-slate-400 font-medium">&#128172; Chat</span>
-            <button id="btnCloseChat" class="text-slate-500 hover:text-white text-sm p-1 leading-none">&#10005;</button>
+        <div class="flex items-center justify-between px-3 py-1.5 border-b border-slate-800 shrink-0 border-l-2 border-l-indigo-500">
+            <span class="text-[10px] text-slate-300 uppercase tracking-wider font-medium">Chat</span>
+            <button id="btnCloseChat" class="h-6 w-6 flex items-center justify-center text-slate-500 hover:text-slate-200 transition-colors duration-150 text-xs">&#10005;</button>
         </div>
-        <div id="chatMessagesMobile" class="flex-1 overflow-y-auto px-3 py-2 space-y-2"></div>
-        <div class="flex gap-2 p-2 border-t border-white/5 shrink-0">
-            <input id="chatInputMobile" type="text" placeholder="Say something…" maxlength="500" autocomplete="off"
-                class="flex-1 text-sm bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white
-                       placeholder-slate-600 focus:outline-none focus:border-violet-500 transition min-w-0" />
+        <div id="chatMessagesMobile" class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"></div>
+        <div class="flex border-t border-slate-800 shrink-0">
+            <input id="chatInputMobile" type="text" placeholder="Message…" maxlength="500" autocomplete="off"
+                class="flex-1 h-8 text-xs bg-slate-800 border-0 px-3 text-slate-100
+                       placeholder-slate-500 focus:outline-none focus:bg-slate-700 transition-colors duration-150 min-w-0" />
             <button id="btnSendChatMobile"
-                class="shrink-0 px-3 py-1.5 bg-violet-700 hover:bg-violet-600 active:scale-95 rounded-lg text-sm transition">
+                class="shrink-0 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 text-xs transition-colors duration-150 border-l border-slate-700">
                 &#10148;
             </button>
         </div>
     </div>
 
     <!-- Footer Controls -->
-    <footer class="flex-none flex items-center gap-2 px-3 sm:px-5 bg-slate-900/95 backdrop-blur-sm border-t border-white/5 z-20"
+    <footer class="flex-none flex items-center gap-1.5 px-3 sm:px-5 bg-slate-900 border-t border-slate-800 z-20"
             style="min-height: var(--footer-h); padding-bottom: env(safe-area-inset-bottom, 0px);">
 
         <button @@click="$rtc.toggleMic()"
-            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
-                   transition-all active:scale-95 shadow-sm ring-1"
-            :class="micActive ? 'bg-slate-700 hover:bg-slate-600 ring-slate-600/30' : 'bg-red-700 hover:bg-red-600 ring-red-600/30'"
+            class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border transition-colors duration-150"
+            :class="micActive ? 'bg-slate-700 border-slate-600 text-slate-100 hover:bg-slate-600' : 'bg-red-900 border-red-700 text-red-300 hover:bg-red-800'"
             :title="micActive ? 'Mute microphone' : 'Unmute microphone'">
             <span x-text="micActive ? '🎤' : '🔇'"></span>
             <span class="hidden sm:inline" x-text="micActive ? 'Mic' : 'Unmute'"></span>
         </button>
 
         <button @@click="$rtc.toggleCamera()"
-            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
-                   transition-all active:scale-95 shadow-sm ring-1"
-            :class="camActive ? 'bg-sky-600 hover:bg-sky-500 ring-sky-500/30' : 'bg-sky-700 hover:bg-sky-600 ring-sky-600/30'"
+            class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border transition-colors duration-150"
+            :class="camActive ? 'bg-sky-800 border-sky-700 text-sky-100 hover:bg-sky-700' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'"
             :title="camActive ? 'Stop camera' : 'Start camera'">
             &#127909; <span class="hidden sm:inline" x-text="camActive ? 'Stop Cam' : 'Camera'"></span>
         </button>
 
         <button id="btnScreenShare"
             @@click="$rtc.toggleScreenShare()"
-            class="hidden sm:flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
-                   transition-all active:scale-95 shadow-sm ring-1"
-            :class="screenActive ? 'bg-violet-600 hover:bg-violet-500 ring-violet-500/30' : 'bg-violet-700 hover:bg-violet-600 ring-violet-600/30'"
+            class="hidden sm:flex h-8 items-center gap-1.5 px-3 text-xs font-medium border transition-colors duration-150"
+            :class="screenActive ? 'bg-indigo-700 border-indigo-600 text-indigo-100 hover:bg-indigo-600' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'"
             :title="screenActive ? 'Stop screen share' : 'Share screen'">
             &#128187; <span class="hidden sm:inline" x-text="screenActive ? 'Stop Share' : 'Screen'"></span>
         </button>
@@ -346,13 +352,12 @@
         <!-- Chat toggle (mobile only) -->
         <div class="relative lg:hidden">
             <button id="btnChat"
-                class="flex items-center gap-1.5 px-3 py-2 rounded-full text-sm font-medium
-                       transition-all active:scale-95 shadow-sm ring-1 bg-slate-700 hover:bg-slate-600 ring-slate-600/30">
+                class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors duration-150">
                 &#128172;
             </button>
             <span id="chatBadge"
-                class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full
-                       text-[9px] flex items-center justify-center font-bold"
+                class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500
+                       text-[8px] flex items-center justify-center font-bold"
                 style="display:none"
                 x-show="unreadCount > 0"
                 x-text="unreadCount > maxUnreadBadge ? maxUnreadBadge + '+' : unreadCount"></span>
@@ -361,8 +366,7 @@
         <div class="flex-1"></div>
 
         <a href="/"
-            class="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-full text-sm font-medium
-                   transition-all active:scale-95 shadow-sm ring-1 bg-red-700/80 hover:bg-red-600 ring-red-600/30">
+            class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border border-red-700 bg-red-900 text-red-300 hover:bg-red-800 transition-colors duration-150">
             &#128682; <span class="hidden sm:inline">Leave</span>
         </a>
     </footer>

@@ -970,14 +970,14 @@ function buildChatItem(name, text, ts, isSelf) {
     div.className = `flex flex-col ${isSelf ? "items-end" : "items-start"} gap-0.5`;
 
     const meta = document.createElement("span");
-    meta.className = "text-[10px] text-slate-500";
+    meta.className = "text-[10px] text-zinc-500";
     meta.textContent = `${name} · ${time}`;
 
     const bubble = document.createElement("div");
     bubble.className =
-        "max-w-[90%] px-3 py-1.5 rounded-xl text-sm break-words " +
-        (isSelf ? "bg-violet-700 text-white rounded-br-sm"
-                : "bg-slate-800 text-slate-200 rounded-bl-sm");
+        "max-w-[90%] px-2.5 py-1 text-xs break-words border " +
+        (isSelf ? "bg-indigo-900 border-indigo-800 text-indigo-100"
+                : "bg-slate-800 border-slate-700 text-slate-200");
     bubble.textContent = text;
 
     div.appendChild(meta);
@@ -989,8 +989,8 @@ function buildChatItem(name, text, ts, isSelf) {
 function showError(message) {
     const toast = document.createElement("div");
     toast.className =
-        "fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 bg-red-700 text-white text-sm " +
-        "rounded-xl shadow-lg max-w-sm text-center pointer-events-none";
+        "fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-950 border border-red-800 text-red-300 text-xs " +
+        "max-w-sm text-center pointer-events-none";
     toast.textContent = message;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 5000);
