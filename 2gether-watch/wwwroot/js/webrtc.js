@@ -10,6 +10,8 @@ const USERNAME = localStorage.getItem("2gw_username") || "Viewer";
 const ICE_SERVERS = [
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun2.l.google.com:19302" },
+    { urls: "stun:stun3.l.google.com:19302" },
 ];
 const SYNC_THROTTLE_MS       = 500;
 const SEEK_THROTTLE_MS       = 1000;
@@ -23,7 +25,9 @@ const SYNC_SHARE_DELAY_MS    = 1200;
 // Maximum number of unread chat notifications to display in the badge.
 const MAX_UNREAD_BADGE_COUNT = 9;
 // Screen-share RTP encoding parameters.
-const SCREEN_MAX_BITRATE_BPS  = 2_500_000; // 2.5 Mbps — enough for crisp 1080p screen share
+const SCREEN_MAX_BITRATE_BPS   = 20_000_000; // 20 Mbps — crisp 1080p@60fps with headroom for detail
+const SCREEN_START_BITRATE_BPS = 10_000_000; // 10 Mbps — high initial bitrate to avoid blurry ramp-up
+const SCREEN_MAX_FRAMERATE     = 60;         // allow up to 60 fps for fluid motion
 const SCREEN_ENCODING_PRIORITY = "high";
 
 // ── Alpine app state (populated in initWebRTC, read/written throughout) ──────
@@ -209,7 +213,11 @@ function ensurePeerState(peerId) {
 
 // ── RTCPeerConnection factory ─────────────────────────────────────────────────
 function createPC(peerId) {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    const pc = new RTCPeerConnection({
+        iceServers: ICE_SERVERS,
+        iceCandidatePoolSize: 4,        // pre-gather candidates for faster connectivity
+        bundlePolicy: "max-bundle",     // multiplex all media over one transport
+    });
 
     // Always advertise receive capability so a newly joined peer can receive
     // existing camera/screen streams even if they have not opened local media yet.
@@ -288,6 +296,9 @@ async function sendOffer(peerId, state) {
     state.makingOffer = true;
     try {
         const offer = await state.pc.createOffer();
+        // Boost the initial bandwidth allocation in the SDP so the encoder starts
+        // at a generous bitrate instead of slowly ramping up from near-zero.
+        offer.sdp = boostSdpBandwidth(offer.sdp);
         await state.pc.setLocalDescription(offer);
         // Send streammap before the offer so the remote side can classify incoming tracks
         sendStreamMapTo(peerId);
@@ -311,6 +322,24 @@ async function trySendPendingOffer(peerId, state) {
     await sendOffer(peerId, state);
 }
 
+// Raise the session-level bandwidth line (b=AS:…) in the SDP so the WebRTC
+// congestion controller starts at a generous rate instead of slowly probing up
+// from a conservative default.  This dramatically reduces the initial "blurry
+// ramp-up" period for screen shares.
+function boostSdpBandwidth(sdp) {
+    if (!sdp) return sdp;
+    // Remove any existing session/media-level bandwidth lines so ours takes effect
+    sdp = sdp.replace(/b=AS:[^\r\n]*/g, "");
+    sdp = sdp.replace(/b=TIAS:[^\r\n]*/g, "");
+    // Insert a generous application-specific bandwidth (in kbps) after each
+    // m=video line so every video m-section gets the boost.
+    const bwKbps = Math.round(SCREEN_MAX_BITRATE_BPS / 1000);
+    const bwBps  = SCREEN_MAX_BITRATE_BPS;
+    sdp = sdp.replace(/(m=video [^\r\n]*\r?\n)/g,
+        `$1b=AS:${bwKbps}\r\nb=TIAS:${bwBps}\r\n`);
+    return sdp;
+}
+
 async function handleOffer(fromId, state, offer) {
     if (state.pc.signalingState === "have-local-offer") {
         // Glare – we roll back ours; the peer with the lower ID wins
@@ -325,6 +354,7 @@ async function handleOffer(fromId, state, offer) {
         await state.pc.setRemoteDescription({ type: "offer", sdp: offer.sdp });
         await flushPendingCandidates(state);
         const answer = await state.pc.createAnswer();
+        answer.sdp = boostSdpBandwidth(answer.sdp);
         await state.pc.setLocalDescription(answer);
         // Offerer sends streammap before offer; answerer must also send its map
         // so the new joiner can classify incoming streams deterministically.
@@ -418,13 +448,24 @@ function toggleMic() {
 async function toggleScreenShare() {
     if (localScreenStream) { stopScreenShare(); return; }
     try {
-        localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        localScreenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                width:     { ideal: 1920 },
+                height:    { ideal: 1080 },
+                frameRate: { ideal: 60, max: 60 },
+                cursor:    "always",
+            },
+            audio: true,
+            // Prefer high frame-rate capture so the remote side sees fluid motion.
+            preferCurrentTab: false,
+            selfBrowserSurface: "exclude",
+        });
         const videoTrack = localScreenStream.getVideoTracks()[0];
         if (videoTrack) {
-            // Prefer sharpness (text/UI clarity) over smooth motion.
+            // "detail" tells the encoder to preserve spatial sharpness (text,
+            // UI elements, fine detail) instead of blurring frames to save bits.
+            // The generous bitrate budget keeps motion smooth at the same time.
             videoTrack.contentHint = "detail";
-            // Lower frame rate → more bits per frame → sharper image at same bandwidth.
-            videoTrack.applyConstraints({ frameRate: { ideal: 15, max: 30 } }).catch(err => console.warn("Screen share: failed to apply frame rate constraints:", err));
             videoTrack.addEventListener("ended", stopScreenShare);
         }
         addLocalTracksToPeers(localScreenStream);
@@ -468,14 +509,22 @@ function removeLocalTracksFromPeers(stream) {
 }
 
 // Apply high-quality encoding parameters to a single RTCRtpSender carrying the
-// screen-share video track.
+// screen-share video track.  Balances sharpness and smoothness for a near-original
+// viewing experience.
 function applyScreenEncodingToSender(sender) {
     const params = sender.getParameters();
     if (!params.encodings?.length) params.encodings = [{}];
     params.encodings.forEach(enc => {
-        enc.maxBitrate = SCREEN_MAX_BITRATE_BPS;
-        enc.priority   = SCREEN_ENCODING_PRIORITY;
+        enc.maxBitrate           = SCREEN_MAX_BITRATE_BPS;
+        enc.maxFramerate         = SCREEN_MAX_FRAMERATE;
+        enc.priority             = SCREEN_ENCODING_PRIORITY;
+        enc.networkPriority      = SCREEN_ENCODING_PRIORITY;
+        enc.scaleResolutionDownBy = 1;          // send at full captured resolution
     });
+    // "balanced" lets the encoder trade a small amount of frame rate for
+    // resolution when bandwidth is tight, keeping the image crisp without
+    // dropping to a slideshow.
+    params.degradationPreference = "balanced";
     sender.setParameters(params).catch(err => console.warn("Screen share: failed to set encoding params:", err));
 }
 
@@ -644,9 +693,19 @@ function setRemoteScreen(peerId, stream) {
     activeScreenPeer = peerId;
     const v = document.getElementById("remoteScreen");
     if (!v) return;
-    // Keep screen playback visible even when the stream includes audio tracks.
+    // Keep screen playback muted so autoplay policy doesn't block rendering.
     v.muted = true;
     v.srcObject = stream;
+
+    // Minimise decode/render latency on the receiving side.
+    // `playsInline` + `autoplay` are already set in HTML; reinforce here for safety.
+    v.playsInline = true;
+    v.autoplay = true;
+    // Disable any user-agent buffering that adds delay (non-standard but respected
+    // by some browsers).
+    if ("latencyHint" in v)    v.latencyHint = 0;
+    if ("disableRemotePlayback" in v) v.disableRemotePlayback = true;
+
     requestMediaPlayback(v);
     v.classList.remove("hidden");
     hideVideoOverlays(["stagePlaceholder", "ytPlayerContainer", "videoPlayer"]);
