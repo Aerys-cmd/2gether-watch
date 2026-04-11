@@ -73,123 +73,107 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @@keyframes float {
-            0%, 100% { transform: translateY(0); }
+        @@keyframes float-up-down {
+            0%, 100% { transform: translateY(0px); }
             50%       { transform: translateY(-10px); }
         }
-        @@keyframes blob {
-            0%, 100% { transform: scale(1) translate(0, 0); }
-            33%       { transform: scale(1.1) translate(3%, -4%); }
-            66%       { transform: scale(0.95) translate(-3%, 3%); }
-        }
-        .float    { animation: float 4s ease-in-out infinite; }
-        .blob     { animation: blob 8s ease-in-out infinite; }
-        .blob-d   { animation: blob 10s ease-in-out infinite reverse; }
-        .gradient-text {
-            background: linear-gradient(135deg, #a78bfa 0%, #60a5fa 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-        .glass {
-            background: rgba(255,255,255,0.03);
-            backdrop-filter: blur(16px);
-            border: 1px solid rgba(255,255,255,0.07);
-        }
-        .input-glow:focus {
-            box-shadow: 0 0 0 2px rgba(139,92,246,0.4);
-        }
+        .film-frame { animation: float-up-down 3.2s ease-in-out infinite; }
     </style>
 </head>
 
-<body class="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4 overflow-x-hidden">
+<body class="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
 
-    <!-- Ambient blobs -->
-    <div class="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div class="blob absolute -top-32 -left-32 w-96 h-96 rounded-full bg-violet-700/20 blur-3xl"></div>
-        <div class="blob-d absolute -bottom-32 -right-32 w-96 h-96 rounded-full bg-blue-700/20 blur-3xl"></div>
-        <div class="blob absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-fuchsia-800/10 blur-3xl"></div>
-    </div>
+    <div class="w-full max-w-xs sm:max-w-sm">
 
-    <div class="relative z-10 w-full max-w-sm sm:max-w-md">
+        <!-- Animated icon -->
+        <div class="flex justify-center mb-5 select-none">
+            <div class="film-frame">
+                <div class="border border-slate-700 bg-slate-900 relative p-5 inline-flex items-center justify-center">
+                    <!-- L-bracket corner accents -->
+                    <span class="absolute top-0 left-0 w-4 h-px bg-indigo-500"></span>
+                    <span class="absolute top-0 left-0 w-px h-4 bg-indigo-500"></span>
+                    <span class="absolute bottom-0 right-0 w-4 h-px bg-indigo-500"></span>
+                    <span class="absolute bottom-0 right-0 w-px h-4 bg-indigo-500"></span>
+                    <span class="text-4xl leading-none">🎬</span>
+                </div>
+            </div>
+        </div>
 
-        <!-- Hero -->
-        <div class="text-center mb-8 select-none">
-            <div class="float inline-block text-6xl mb-4">🎬</div>
-            <h1 class="text-4xl sm:text-5xl font-extrabold tracking-tight leading-tight">
-                <span class="gradient-text">2gether</span><span class="text-white">Watch</span>
+        <!-- Brand -->
+        <div class="text-center mb-6 select-none">
+            <h1 class="text-3xl font-bold tracking-tight">
+                <span class="text-indigo-400">2g</span><span class="text-slate-100">Watch</span>
             </h1>
-            <p class="mt-3 text-slate-400 text-sm sm:text-base">Watch together, in sync, from anywhere.</p>
+            <p class="mt-1 text-slate-400 text-xs tracking-wide">Watch together, in sync, from anywhere.</p>
         </div>
 
         <!-- Card -->
-        <div class="glass rounded-2xl p-6 sm:p-8 space-y-5 shadow-2xl">
+        <div class="bg-slate-900 border border-slate-700/60 p-5 space-y-4">
 
             <!-- Display name -->
             <div class="space-y-1">
-                <label for="usernameInput" class="text-xs text-slate-500 pl-1">Your display name</label>
+                <label for="usernameInput" class="text-[10px] text-slate-400 uppercase tracking-wider">Display name</label>
                 <input id="usernameInput" type="text" placeholder="Enter your name…" maxlength="30"
                     autocomplete="nickname"
-                    class="input-glow w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white
-                           placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-all text-sm" />
+                    class="w-full h-8 px-3 bg-slate-800 border border-slate-700 text-slate-100
+                           placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors duration-150 text-sm" />
             </div>
 
             <!-- Create Room -->
             <button id="btnCreate"
-                class="w-full py-3.5 rounded-xl text-base font-semibold transition-all duration-150 active:scale-[0.97] shadow-lg
-                       bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500
-                       ring-1 ring-violet-500/30">
-                ✨ Create a New Room
+                class="w-full h-9 bg-indigo-600 hover:bg-indigo-500 border border-indigo-600 hover:border-indigo-500
+                       text-sm font-semibold transition-colors duration-150">
+                Create New Room
             </button>
 
             <!-- Divider -->
             <div class="flex items-center gap-3">
-                <div class="flex-1 h-px bg-white/8"></div>
-                <span class="text-slate-500 text-xs shrink-0">or join an existing room</span>
-                <div class="flex-1 h-px bg-white/8"></div>
+                <div class="flex-1 h-px bg-slate-700/50"></div>
+                <span class="text-slate-500 text-[10px] shrink-0 uppercase tracking-wider">or join existing</span>
+                <div class="flex-1 h-px bg-slate-700/50"></div>
             </div>
 
             <!-- Join Room -->
-            <div class="space-y-2">
-                <div class="flex gap-2">
+            <div class="space-y-1.5">
+                <div class="flex">
                     <input id="roomIdInput" type="text" placeholder="Enter room ID…"
                         autocomplete="off" spellcheck="false" maxlength="64"
-                        class="input-glow flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white
-                               placeholder-slate-600 focus:outline-none focus:border-violet-500 transition-all
-                               font-mono text-sm" />
+                        class="flex-1 h-8 px-3 bg-slate-800 border border-slate-700 border-r-0 text-slate-100
+                               placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors duration-150
+                               font-mono text-sm min-w-0" />
                     <button id="btnJoin"
-                        class="px-5 py-3 bg-sky-600 hover:bg-sky-500 active:scale-[0.97] rounded-xl font-semibold
-                               text-sm transition-all duration-150 shrink-0 ring-1 ring-sky-500/30 shadow">
+                        class="h-8 px-4 bg-slate-700 hover:bg-slate-600 border border-slate-700 hover:border-slate-600
+                               font-semibold text-sm transition-colors duration-150 shrink-0 text-slate-200">
                         Join →
                     </button>
                 </div>
-                <p id="errMsg" class="hidden text-red-400 text-xs flex items-center gap-1 pl-1">
-                    ⚠&nbsp;<span id="errText">Please enter a room ID.</span>
+                <p id="errMsg" class="hidden text-red-400 text-xs flex items-center gap-1">
+                    <span id="errText">Please enter a room ID.</span>
                 </p>
             </div>
         </div>
 
-        <!-- Feature pills -->
-        <div class="mt-5 grid grid-cols-4 gap-2 text-center">
-            <div class="glass rounded-xl py-3 px-2">
-                <div class="text-xl mb-1">🔒</div>
-                <div class="text-[11px] text-slate-500">Private</div>
+        <!-- Feature row -->
+        <div class="mt-3 grid grid-cols-4 gap-1.5 text-center">
+            <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
+                <div class="text-base mb-0.5">🔒</div>
+                <div class="text-[10px] text-slate-400">Private</div>
             </div>
-            <div class="glass rounded-xl py-3 px-2">
-                <div class="text-xl mb-1">▶️</div>
-                <div class="text-[11px] text-slate-500">Synced Video</div>
+            <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
+                <div class="text-base mb-0.5">▶️</div>
+                <div class="text-[10px] text-slate-400">Synced</div>
             </div>
-            <div class="glass rounded-xl py-3 px-2">
-                <div class="text-xl mb-1">💬</div>
-                <div class="text-[11px] text-slate-500">Live Chat</div>
+            <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
+                <div class="text-base mb-0.5">💬</div>
+                <div class="text-[10px] text-slate-400">Chat</div>
             </div>
-            <div class="glass rounded-xl py-3 px-2">
-                <div class="text-xl mb-1">🖥️</div>
-                <div class="text-[11px] text-slate-500">Screen Share</div>
+            <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
+                <div class="text-base mb-0.5">🖥️</div>
+                <div class="text-[10px] text-slate-400">Screen</div>
             </div>
         </div>
 
-        <p class="mt-5 text-center text-slate-700 text-xs">No sign-up required. Free forever.</p>
+        <p class="mt-4 text-center text-slate-500 text-[10px] uppercase tracking-wider">No sign-up required · Free forever</p>
     </div>
 
     <script>
