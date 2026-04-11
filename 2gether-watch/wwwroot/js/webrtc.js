@@ -22,6 +22,8 @@ const APPLY_SYNC_GUARD_MS    = 600;
 const SYNC_SHARE_DELAY_MS    = 1200;
 // Maximum number of unread chat notifications to display in the badge.
 const MAX_UNREAD_BADGE_COUNT = 9;
+// Maximum bitrate (bps) applied to the screen-share sender to preserve detail.
+const SCREEN_SHARE_MAX_BITRATE = 4_000_000;
 
 // ── Alpine app state (populated in initWebRTC, read/written throughout) ──────
 function getApp() { return window.alpineApp ?? null; }
@@ -315,11 +317,31 @@ function toggleMic() {
 async function toggleScreenShare() {
     if (localScreenStream) { stopScreenShare(); return; }
     try {
-        localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        localScreenStream.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare);
+        localScreenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+                frameRate: { ideal: 30, max: 30 },
+                width:     { ideal: 1920 },
+                height:    { ideal: 1080 },
+            },
+            audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                sampleRate:       48000,
+            },
+        });
+        const videoTrack = localScreenStream.getVideoTracks()[0];
+        if (videoTrack) {
+            // Hint to the encoder that this is detailed screen/text content (not motion),
+            // so it preserves sharpness rather than applying motion-smoothing compression.
+            videoTrack.contentHint = "detail";
+            videoTrack.addEventListener("ended", stopScreenShare);
+        }
         addLocalTracksToPeers(localScreenStream);
         broadcastStreamMap();
         setState({ screenActive: true });
+        // Push high-quality encoding parameters to every peer sender now that the
+        // track has been added (setParameters is safe to call before ICE completes).
+        await applyScreenShareEncoding();
     } catch (e) {
         if (e.name !== "NotAllowedError") console.error("Screen share:", e);
     }
@@ -332,6 +354,31 @@ function stopScreenShare() {
     wsSend({ type: "screen-off" });
     localScreenStream = null;
     setState({ screenActive: false });
+}
+
+// Raise the encoder's max bitrate and frame-rate ceiling for every peer sender
+// carrying the screen-share video track.  This prevents the browser from
+// throttling quality below what the capture hardware can produce.
+async function applyScreenShareEncoding() {
+    if (!localScreenStream) return;
+    const videoTrack = localScreenStream.getVideoTracks()[0];
+    if (!videoTrack) return;
+    for (const [, state] of peerStates) {
+        const sender = state.pc.getSenders().find(s => s.track === videoTrack);
+        if (!sender) continue;
+        try {
+            const params = sender.getParameters();
+            if (params.encodings?.length) {
+                params.encodings.forEach(enc => {
+                    enc.maxBitrate   = SCREEN_SHARE_MAX_BITRATE; // 4 Mbps — preserves detail for 1080p screens
+                    enc.maxFramerate = 30;
+                });
+                await sender.setParameters(params);
+            }
+        } catch (e) {
+            console.warn("applyScreenShareEncoding:", e);
+        }
+    }
 }
 
 function addLocalTracksToPeers(stream) {
