@@ -22,6 +22,9 @@ const APPLY_SYNC_GUARD_MS    = 600;
 const SYNC_SHARE_DELAY_MS    = 1200;
 // Maximum number of unread chat notifications to display in the badge.
 const MAX_UNREAD_BADGE_COUNT = 9;
+// Screen-share RTP encoding parameters.
+const SCREEN_MAX_BITRATE_BPS  = 2_500_000; // 2.5 Mbps — enough for crisp 1080p screen share
+const SCREEN_ENCODING_PRIORITY = "high";
 
 // ── Alpine app state (populated in initWebRTC, read/written throughout) ──────
 function getApp() { return window.alpineApp ?? null; }
@@ -267,15 +270,7 @@ function createPC(peerId) {
         const screenTrack = localScreenStream.getVideoTracks()[0];
         if (screenTrack) {
             const sender = pc.getSenders().find(s => s.track === screenTrack);
-            if (sender) {
-                const params = sender.getParameters();
-                if (!params.encodings?.length) params.encodings = [{}];
-                params.encodings.forEach(enc => {
-                    enc.maxBitrate = 2_500_000;
-                    enc.priority   = "high";
-                });
-                sender.setParameters(params).catch(err => console.warn("Screen share: failed to set encoding params:", err));
-            }
+            if (sender) applyScreenEncodingToSender(sender);
         }
     }
 
@@ -472,6 +467,18 @@ function removeLocalTracksFromPeers(stream) {
     });
 }
 
+// Apply high-quality encoding parameters to a single RTCRtpSender carrying the
+// screen-share video track.
+function applyScreenEncodingToSender(sender) {
+    const params = sender.getParameters();
+    if (!params.encodings?.length) params.encodings = [{}];
+    params.encodings.forEach(enc => {
+        enc.maxBitrate = SCREEN_MAX_BITRATE_BPS;
+        enc.priority   = SCREEN_ENCODING_PRIORITY;
+    });
+    sender.setParameters(params).catch(err => console.warn("Screen share: failed to set encoding params:", err));
+}
+
 // Apply high-quality encoding parameters to every sender carrying the screen-share
 // video track. Called after tracks are added to peers and again when a new peer joins
 // while a screen share is already active.
@@ -482,13 +489,7 @@ function applyScreenEncodings() {
     for (const [, state] of peerStates) {
         const sender = state.pc.getSenders().find(s => s.track === screenTrack);
         if (!sender) continue;
-        const params = sender.getParameters();
-        if (!params.encodings?.length) params.encodings = [{}];
-        params.encodings.forEach(enc => {
-            enc.maxBitrate = 2_500_000; // 2.5 Mbps — enough for crisp 1080p screen share
-            enc.priority   = "high";
-        });
-        sender.setParameters(params).catch(err => console.warn("Screen share: failed to set encoding params:", err));
+        applyScreenEncodingToSender(sender);
     }
 }
 
