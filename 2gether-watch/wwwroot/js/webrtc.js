@@ -22,6 +22,9 @@ const APPLY_SYNC_GUARD_MS    = 600;
 const SYNC_SHARE_DELAY_MS    = 1200;
 // Maximum number of unread chat notifications to display in the badge.
 const MAX_UNREAD_BADGE_COUNT = 9;
+// Screen-share RTP encoding parameters.
+const SCREEN_MAX_BITRATE_BPS  = 2_500_000; // 2.5 Mbps — enough for crisp 1080p screen share
+const SCREEN_ENCODING_PRIORITY = "high";
 
 // ── Alpine app state (populated in initWebRTC, read/written throughout) ──────
 function getApp() { return window.alpineApp ?? null; }
@@ -261,7 +264,15 @@ function createPC(peerId) {
 
     // Add existing local tracks to the new PC
     if (localCamStream) localCamStream.getTracks().forEach(t => pc.addTrack(t, localCamStream));
-    if (localScreenStream) localScreenStream.getTracks().forEach(t => pc.addTrack(t, localScreenStream));
+    if (localScreenStream) {
+        localScreenStream.getTracks().forEach(t => pc.addTrack(t, localScreenStream));
+        // Apply quality encodings for the screen track on this new connection.
+        const screenTrack = localScreenStream.getVideoTracks()[0];
+        if (screenTrack) {
+            const sender = pc.getSenders().find(s => s.track === screenTrack);
+            if (sender) applyScreenEncodingToSender(sender);
+        }
+    }
 
     return pc;
 }
@@ -408,8 +419,16 @@ async function toggleScreenShare() {
     if (localScreenStream) { stopScreenShare(); return; }
     try {
         localScreenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        localScreenStream.getVideoTracks()[0]?.addEventListener("ended", stopScreenShare);
+        const videoTrack = localScreenStream.getVideoTracks()[0];
+        if (videoTrack) {
+            // Prefer sharpness (text/UI clarity) over smooth motion.
+            videoTrack.contentHint = "detail";
+            // Lower frame rate → more bits per frame → sharper image at same bandwidth.
+            videoTrack.applyConstraints({ frameRate: { ideal: 15, max: 30 } }).catch(err => console.warn("Screen share: failed to apply frame rate constraints:", err));
+            videoTrack.addEventListener("ended", stopScreenShare);
+        }
         addLocalTracksToPeers(localScreenStream);
+        applyScreenEncodings();
         broadcastStreamMap();
         setState({ screenActive: true });
     } catch (e) {
@@ -446,6 +465,32 @@ function removeLocalTracksFromPeers(stream) {
           .forEach(s => pc.removeTrack(s));
         requestRenegotiation(peerId, state);
     });
+}
+
+// Apply high-quality encoding parameters to a single RTCRtpSender carrying the
+// screen-share video track.
+function applyScreenEncodingToSender(sender) {
+    const params = sender.getParameters();
+    if (!params.encodings?.length) params.encodings = [{}];
+    params.encodings.forEach(enc => {
+        enc.maxBitrate = SCREEN_MAX_BITRATE_BPS;
+        enc.priority   = SCREEN_ENCODING_PRIORITY;
+    });
+    sender.setParameters(params).catch(err => console.warn("Screen share: failed to set encoding params:", err));
+}
+
+// Apply high-quality encoding parameters to every sender carrying the screen-share
+// video track. Called after tracks are added to peers and again when a new peer joins
+// while a screen share is already active.
+function applyScreenEncodings() {
+    if (!localScreenStream) return;
+    const screenTrack = localScreenStream.getVideoTracks()[0];
+    if (!screenTrack) return;
+    for (const [, state] of peerStates) {
+        const sender = state.pc.getSenders().find(s => s.track === screenTrack);
+        if (!sender) continue;
+        applyScreenEncodingToSender(sender);
+    }
 }
 
 // ── Remote camera tiles ───────────────────────────────────────────────────────
