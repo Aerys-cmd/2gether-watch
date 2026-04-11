@@ -687,7 +687,7 @@ function appendChatMessage(name, text, ts, isSelf) {
         if (app) {
             const badge = document.getElementById("chatBadge");
             const drawer = document.getElementById("chatDrawer");
-            const isDrawerClosed = !drawer || drawer.classList.contains("translate-y-full");
+            const isDrawerClosed = !drawer || drawer.classList.contains("chat-drawer-closed");
             if (badge && isDrawerClosed)
                 badge.classList.remove("hidden");
             if (isDrawerClosed)
@@ -777,8 +777,8 @@ function initWebRTC() {
     // Mobile chat drawer
     document.getElementById("btnChat")?.addEventListener("click", () => {
         const drawer = document.getElementById("chatDrawer");
-        const isOpen = !drawer.classList.contains("translate-y-full");
-        drawer.classList.toggle("translate-y-full", isOpen);
+        const isOpen = !drawer.classList.contains("chat-drawer-closed");
+        drawer.classList.toggle("chat-drawer-closed", isOpen);
         if (!isOpen) {
             document.getElementById("chatBadge")?.classList.add("hidden");
             const app = getApp();
@@ -786,7 +786,7 @@ function initWebRTC() {
         }
     });
     document.getElementById("btnCloseChat")?.addEventListener("click", () => {
-        document.getElementById("chatDrawer")?.classList.add("translate-y-full");
+        document.getElementById("chatDrawer")?.classList.add("chat-drawer-closed");
     });
 
     // Copy room link
