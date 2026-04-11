@@ -32,6 +32,42 @@ function setState(patch) {
     if (app) Object.assign(app, patch);
 }
 
+// ── Autoplay recovery (mobile/browser policy) ───────────────────────────────
+const pendingAutoplayEls = new Set();
+let autoplayUnlockBound = false;
+
+function requestMediaPlayback(el) {
+    if (!el) return;
+    const p = el.play();
+    if (p?.catch) {
+        p.catch(() => {
+            pendingAutoplayEls.add(el);
+            bindAutoplayUnlock();
+        });
+    }
+}
+
+function bindAutoplayUnlock() {
+    if (autoplayUnlockBound) return;
+    autoplayUnlockBound = true;
+
+    const unlock = () => {
+        for (const el of [...pendingAutoplayEls]) {
+            const p = el.play();
+            if (p?.then) {
+                p.then(() => pendingAutoplayEls.delete(el)).catch(() => {});
+            } else {
+                pendingAutoplayEls.delete(el);
+            }
+        }
+    };
+
+    // Use broad interaction hooks so one tap/click unblocks pending remote media.
+    ["pointerdown", "touchstart", "keydown", "click"].forEach(type => {
+        document.addEventListener(type, unlock, { passive: true });
+    });
+}
+
 // ── WebSocket ────────────────────────────────────────────────────────────────
 let ws = null;
 let myPeerId = null;  // assigned by server
@@ -66,9 +102,9 @@ async function onWsMessage(event) {
     if (raw.startsWith("peers:")) {
         const idList = raw.slice(6);
         if (idList) {
-            // We are the new joiner — offer to every existing peer
+            // New joiner creates peer states; existing peers will initiate offers.
             for (const pid of idList.split(",")) {
-                if (pid) await initiateConnection(pid);
+                if (pid) ensurePeerState(pid);
             }
         }
         setState({ status: idList ? "Connected 🎉" : "Waiting for others…", statusColor: idList ? "green" : "amber" });
@@ -77,8 +113,8 @@ async function onWsMessage(event) {
 
     if (raw.startsWith("peer-joined:")) {
         const pid = raw.slice(12);
-        // We are an existing peer — create a PC and wait for the new joiner's offer
-        ensurePeerState(pid);
+        // Existing peers are the designated offerers for newcomers.
+        await initiateConnection(pid);
         setState({ status: "Connected 🎉", statusColor: "green", peerCount: peerStates.size });
         return;
     }
@@ -111,15 +147,18 @@ async function onWsMessage(event) {
             await handleOffer(fromId, state, msg);
             break;
         case "answer":
-            if (state.pc.signalingState === "have-local-offer")
+            if (state.pc.signalingState === "have-local-offer") {
                 await state.pc.setRemoteDescription(msg).catch(e => console.warn("setRemoteDescription(answer):", e));
+                await flushPendingCandidates(state);
+            }
             break;
         case "candidate":
             if (msg.candidate)
-                await state.pc.addIceCandidate(msg.candidate).catch(() => {});
+                await addOrQueueCandidate(state, msg.candidate);
             break;
         case "streammap":
             Object.assign(state.streamKindMap, msg.map);
+            routeKnownRemoteVideoStreams(fromId, state);
             break;
         case "camera-off":
             removePeerCam(fromId);
@@ -141,7 +180,7 @@ async function onWsMessage(event) {
 }
 
 // ── Per-peer state ────────────────────────────────────────────────────────────
-// Map<peerId, { pc, makingOffer, streamKindMap, username, camEl }>
+// Map<peerId, { pc, makingOffer, needsNegotiation, streamKindMap, remoteVideoStreams, pendingCandidates, username, camEl, audioEl }>
 const peerStates = new Map();
 
 function ensurePeerState(peerId) {
@@ -149,9 +188,13 @@ function ensurePeerState(peerId) {
         const state = {
             pc: createPC(peerId),
             makingOffer: false,
+            needsNegotiation: false,
             streamKindMap: {},
+            remoteVideoStreams: {},
+            pendingCandidates: [],
             username: "Viewer",
             camEl: null,
+            audioEl: null,
         };
         peerStates.set(peerId, state);
         addPeerCamTile(peerId, state);
@@ -167,6 +210,13 @@ function ensurePeerState(peerId) {
 function createPC(peerId) {
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
+    // Always advertise receive capability so a newly joined peer can receive
+    // existing camera/screen streams even if they have not opened local media yet.
+    // This prevents one-way "no video until I open my camera" sessions.
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    pc.addTransceiver("video", { direction: "recvonly" }); // camera lane
+    pc.addTransceiver("video", { direction: "recvonly" }); // screen-share lane
+
     pc.onicecandidate = ({ candidate }) => {
         if (candidate) wsSend({ to: peerId, type: "candidate", candidate });
     };
@@ -174,14 +224,18 @@ function createPC(peerId) {
     pc.ontrack = ({ track, streams }) => {
         const stream = streams?.[0];
         if (!stream) return;
+
+        if (track.kind === "audio") {
+            setPeerAudioStream(peerId, stream);
+            return;
+        }
+        if (track.kind !== "video") return;
+
         const state = peerStates.get(peerId);
         if (!state) return;
-        const kind = state.streamKindMap[stream.id];
-        if (kind === "screen") {
-            setRemoteScreen(peerId, stream);
-        } else {
-            setPeerCamStream(peerId, stream);
-        }
+        // ontrack can fire before streammap arrives; cache and route when known.
+        state.remoteVideoStreams[stream.id] = stream;
+        routeRemoteVideoStream(peerId, state, stream.id);
     };
 
     pc.oniceconnectionstatechange = () => {
@@ -198,7 +252,12 @@ function createPC(peerId) {
     pc.onsignalingstatechange = () => {
         if (pc.signalingState === "stable") {
             const state = peerStates.get(peerId);
-            if (state) state.makingOffer = false;
+            if (!state) return;
+            state.makingOffer = false;
+            // If we attempted renegotiation while non-stable, retry now.
+            if (state.needsNegotiation) {
+                void trySendPendingOffer(peerId, state);
+            }
         }
     };
 
@@ -227,7 +286,20 @@ async function sendOffer(peerId, state) {
     } catch (e) {
         console.error("sendOffer:", e);
         state.makingOffer = false;
+        state.needsNegotiation = true;
     }
+}
+
+function requestRenegotiation(peerId, state) {
+    state.needsNegotiation = true;
+    void trySendPendingOffer(peerId, state);
+}
+
+async function trySendPendingOffer(peerId, state) {
+    if (!state.needsNegotiation) return;
+    if (state.makingOffer || state.pc.signalingState !== "stable") return;
+    state.needsNegotiation = false;
+    await sendOffer(peerId, state);
 }
 
 async function handleOffer(fromId, state, offer) {
@@ -242,12 +314,32 @@ async function handleOffer(fromId, state, offer) {
     }
     try {
         await state.pc.setRemoteDescription({ type: "offer", sdp: offer.sdp });
+        await flushPendingCandidates(state);
         const answer = await state.pc.createAnswer();
         await state.pc.setLocalDescription(answer);
+        // Offerer sends streammap before offer; answerer must also send its map
+        // so the new joiner can classify incoming streams deterministically.
+        sendStreamMapTo(fromId);
         wsSend(Object.assign({ to: fromId }, state.pc.localDescription.toJSON()));
     } catch (e) {
         console.error("handleOffer:", e);
     }
+}
+
+async function addOrQueueCandidate(state, candidate) {
+    // Candidate messages may arrive before SDP is applied; queue to avoid drops.
+    if (!state.pc.remoteDescription) {
+        state.pendingCandidates.push(candidate);
+        return;
+    }
+    await state.pc.addIceCandidate(candidate).catch(() => {});
+}
+
+async function flushPendingCandidates(state) {
+    if (!state.pc.remoteDescription || state.pendingCandidates.length === 0) return;
+    const queued = state.pendingCandidates.splice(0, state.pendingCandidates.length);
+    for (const candidate of queued)
+        await state.pc.addIceCandidate(candidate).catch(() => {});
 }
 
 function closePeer(peerId) {
@@ -388,25 +480,19 @@ function addLocalTracksToPeers(stream) {
             if (!state.pc.getSenders().some(s => s.track === t))
                 state.pc.addTrack(t, stream);
         });
+        requestRenegotiation(peerId, state);
     }
-    // Trigger renegotiation by re-offering to all peers
-    renegotiateAll();
 }
 
 function removeLocalTracksFromPeers(stream) {
     const trackSet = new Set(stream.getTracks());
-    peerStates.forEach(({ pc }) => {
+    peerStates.forEach((state, peerId) => {
+        const { pc } = state;
         pc.getSenders()
           .filter(s => s.track && trackSet.has(s.track))
           .forEach(s => pc.removeTrack(s));
+        requestRenegotiation(peerId, state);
     });
-    renegotiateAll();
-}
-
-async function renegotiateAll() {
-    for (const [peerId, state] of peerStates) {
-        await sendOffer(peerId, state);
-    }
 }
 
 // ── Remote camera tiles ───────────────────────────────────────────────────────
@@ -450,20 +536,94 @@ function addPeerCamTile(peerId, state) {
 function removePeerCam(peerId) {
     const state = peerStates.get(peerId);
     if (state?.camEl) {
+        pendingAutoplayEls.delete(state.camEl);
         state.camEl.srcObject = null;
         state.camEl = null;
+    }
+    if (state?.audioEl) {
+        pendingAutoplayEls.delete(state.audioEl);
+        state.audioEl.srcObject = null;
+        state.audioEl.remove();
+        state.audioEl = null;
     }
     document.getElementById(`cam-tile-${peerId}`)?.remove();
     const ph = document.getElementById(`cam-ph-${peerId}`);
     if (ph) ph.classList.remove("hidden");
 }
 
+function routeRemoteVideoStream(peerId, state, streamId) {
+    const stream = state.remoteVideoStreams[streamId];
+    if (!stream) return;
+
+    const kind = state.streamKindMap[streamId];
+    if (!kind) return;
+
+    if (kind === "screen") {
+        setRemoteScreen(peerId, stream);
+        return;
+    }
+
+    setPeerCamStream(peerId, stream);
+}
+
+function routeKnownRemoteVideoStreams(peerId, state) {
+    Object.keys(state.remoteVideoStreams).forEach(streamId => {
+        routeRemoteVideoStream(peerId, state, streamId);
+    });
+}
+
 function setPeerCamStream(peerId, stream) {
     const state = peerStates.get(peerId);
     if (!state) return;
     if (!state.camEl) addPeerCamTile(peerId, state);
-    state.camEl.srcObject = stream;
-    document.getElementById(`cam-ph-${peerId}`)?.classList.add("hidden");
+
+    const videoEl = state.camEl;
+    const ph = document.getElementById(`cam-ph-${peerId}`);
+
+    // Keep remote camera video muted so browser autoplay policy does not block
+    // rendering when the stream also carries an audio track.
+    videoEl.muted = true;
+
+    // Keep placeholder visible until the first real frame is available to avoid
+    // showing a gray/blank tile during track start-up.
+    ph?.classList.remove("hidden");
+    videoEl.srcObject = stream;
+
+    const revealVideo = () => ph?.classList.add("hidden");
+    videoEl.onloadeddata = revealVideo;
+    videoEl.onplaying = revealVideo;
+
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+        track.onunmute = revealVideo;
+        track.onmute = () => ph?.classList.remove("hidden");
+        if (!track.muted && track.readyState === "live") revealVideo();
+    }
+
+    requestMediaPlayback(videoEl);
+}
+
+function setPeerAudioStream(peerId, stream) {
+    const state = peerStates.get(peerId);
+    if (!state) return;
+
+    const audioTracks = typeof stream.getAudioTracks === "function"
+        ? stream.getAudioTracks()
+        : [];
+    if (audioTracks.length === 0) return;
+
+    if (!state.audioEl) {
+        const audioEl = document.createElement("audio");
+        audioEl.autoplay = true;
+        audioEl.playsInline = true;
+        audioEl.setAttribute("data-peer-audio", peerId);
+        audioEl.style.display = "none";
+        document.body.appendChild(audioEl);
+        state.audioEl = audioEl;
+    }
+
+    state.audioEl.srcObject = new MediaStream(audioTracks);
+    requestMediaPlayback(state.audioEl);
 }
 
 function updatePeerLabel(peerId, name) {
@@ -486,7 +646,10 @@ function setRemoteScreen(peerId, stream) {
     activeScreenPeer = peerId;
     const v = document.getElementById("remoteScreen");
     if (!v) return;
+    // Keep screen playback visible even when the stream includes audio tracks.
+    v.muted = true;
     v.srcObject = stream;
+    requestMediaPlayback(v);
     v.classList.remove("hidden");
     hideVideoOverlays(["stagePlaceholder", "ytPlayerContainer", "videoPlayer"]);
     setState({ videoType: "screen" });
