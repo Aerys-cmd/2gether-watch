@@ -48,3 +48,5 @@ node_modules/
 # macOS metadata
 .DS_Store
 
+frontend-tests/test-results/
+frontend-tests/playwright-report/
