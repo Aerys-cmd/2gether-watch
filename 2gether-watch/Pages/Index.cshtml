@@ -85,25 +85,20 @@
 
     <div class="w-full max-w-xs sm:max-w-sm">
 
-        <!-- Animated icon -->
+        <!-- Animated logo -->
         <div class="flex justify-center mb-5 select-none">
             <div class="film-frame">
-                <div class="border border-slate-700 bg-slate-900 relative p-5 inline-flex items-center justify-center">
-                    <!-- L-bracket corner accents -->
-                    <span class="absolute top-0 left-0 w-4 h-px bg-indigo-500"></span>
-                    <span class="absolute top-0 left-0 w-px h-4 bg-indigo-500"></span>
-                    <span class="absolute bottom-0 right-0 w-4 h-px bg-indigo-500"></span>
-                    <span class="absolute bottom-0 right-0 w-px h-4 bg-indigo-500"></span>
-                    <span class="text-4xl leading-none">🎬</span>
-                </div>
+                <a href="/" class="hover:opacity-85 transition-opacity duration-150 block">
+                    <!-- width/height match the SVG's natural ratio (360×96) so the browser
+                         reserves the right amount of space before the file loads (no CLS).
+                         The CSS class makes it fluid within its container. -->
+                    <img src="/logo.svg" alt="2gWatch" width="360" height="96" class="w-full" />
+                </a>
             </div>
         </div>
 
         <!-- Brand -->
         <div class="text-center mb-6 select-none">
-            <h1 class="text-3xl font-bold tracking-tight">
-                <span class="text-indigo-400">2g</span><span class="text-slate-100">Watch</span>
-            </h1>
             <p class="mt-1 text-slate-400 text-xs tracking-wide">Watch together, in sync, from anywhere.</p>
         </div>
 
