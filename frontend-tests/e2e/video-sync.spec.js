@@ -113,6 +113,10 @@ function captureSyncFrames(page) {
 // sync logic only cares about the URL string being relayed, not the video content.
 const VIDEO_URL = "https://test.example.com/sample.mp4";
 
+// Must be longer than APPLY_SYNC_GUARD_MS (600 ms) so the guard has cleared by
+// the time we inject the next sync message in two-peer tests.
+const SYNC_GUARD_CLEARANCE_MS = 800;
+
 // ── two-peer load-sync tests ──────────────────────────────────────────────────
 
 test.describe("video sync — load URL", () => {
@@ -159,8 +163,9 @@ test.describe("video sync — load URL", () => {
             await pageA.fill("#urlInput", VIDEO_URL);
             await pageA.click("#btnLoad");
 
-            // Give the load a moment to settle before Peer B joins.
-            await pageA.waitForTimeout(1_500);
+            // Wait until Peer A has recorded the URL before Peer B joins, so
+            // sendVideoStateTo has a URL to relay.
+            await waitForVideoUrl(pageA, VIDEO_URL, 5_000);
 
             // Peer B joins late.  ensurePeerState → sendVideoStateTo fires
             // immediately for "load" and after SYNC_SHARE_DELAY_MS for play/pause.
@@ -390,7 +395,7 @@ test.describe("video sync — applyRemoteSync", () => {
             await pageA.click("#btnLoad");
             await waitForVideoUrl(pageB, VIDEO_URL);
             // Allow isApplyingSync guard (APPLY_SYNC_GUARD_MS = 600 ms) to clear.
-            await pageB.waitForTimeout(800);
+            await pageB.waitForTimeout(SYNC_GUARD_CLEARANCE_MS);
 
             // Peer A broadcasts a pause with time=30.
             await pageA.evaluate(() => wsSend({ type: "sync", action: "pause", time: 30 }));
@@ -424,7 +429,7 @@ test.describe("video sync — applyRemoteSync", () => {
             await pageA.fill("#urlInput", VIDEO_URL);
             await pageA.click("#btnLoad");
             await waitForVideoUrl(pageB, VIDEO_URL);
-            await pageB.waitForTimeout(800);
+            await pageB.waitForTimeout(SYNC_GUARD_CLEARANCE_MS);
 
             await pageA.evaluate(() => wsSend({ type: "sync", action: "seek", time: 45 }));
 
