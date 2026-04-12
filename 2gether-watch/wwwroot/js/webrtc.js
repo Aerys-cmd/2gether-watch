@@ -13,7 +13,6 @@ const ICE_SERVERS = [
     { urls: "stun:stun2.l.google.com:19302" },
     { urls: "stun:stun3.l.google.com:19302" },
 ];
-const SYNC_THROTTLE_MS       = 500;
 const SEEK_THROTTLE_MS       = 1000;
 const SYNC_TOLERANCE_S       = 2;
 // Time to suppress echo events after we apply a remote sync action.
@@ -823,7 +822,10 @@ function createYTPlayer(videoId) {
 
 function onYtPlayerReady() {
     ytPlayerReady = true;
-    ytLoadingFromRemote = false;
+    // Keep ytLoadingFromRemote true for APPLY_SYNC_GUARD_MS so that the initial
+    // onStateChange(PLAYING) the IFrame API fires immediately after onReady
+    // (due to autoplay:1) is suppressed and does not echo a spurious "play" sync.
+    setTimeout(() => { ytLoadingFromRemote = false; }, APPLY_SYNC_GUARD_MS);
     if (pendingYtSync) {
         const sync = pendingYtSync;
         pendingYtSync = null;
