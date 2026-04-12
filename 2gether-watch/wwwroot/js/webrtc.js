@@ -743,12 +743,19 @@ function restoreLocalVideo() {
 }
 
 // ── Video sync ────────────────────────────────────────────────────────────────
-let ytPlayer         = null;
-let ytReady          = false;
-let currentVideoType = null;
-let currentVideoUrl  = "";
-let isApplyingSync   = false;
-let lastSyncSent     = 0;
+let ytPlayer            = null;
+let ytReady             = false;
+// True once the YT player's onReady callback has fired (player APIs are safe to call).
+let ytPlayerReady       = false;
+// True while a YT player is loading as a result of applyRemoteSync("load"), so that
+// the player's own auto-play onStateChange event is suppressed and not echoed back.
+let ytLoadingFromRemote = false;
+// Queued play/pause/seek command to apply once the YT player becomes ready.
+let pendingYtSync       = null;
+let currentVideoType    = null;
+let currentVideoUrl     = "";
+let isApplyingSync      = false;
+let lastSyncSent        = 0;
 
 function getYouTubeId(url) {
     const m = url.match(
@@ -801,6 +808,7 @@ function loadYouTube(videoId) {
 
 function createYTPlayer(videoId) {
     if (ytPlayer) { ytPlayer.destroy(); ytPlayer = null; }
+    ytPlayerReady = false;
     const c = document.getElementById("ytPlayerContainer");
     if (!c) return;
     c.innerHTML = '<div id="ytPlayerEl"></div>';
@@ -809,18 +817,34 @@ function createYTPlayer(videoId) {
         width: "100%",
         height: "100%",
         playerVars: { autoplay: 1, rel: 0, modestbranding: 1 },
-        events: { onStateChange: onYtStateChange },
+        events: { onReady: onYtPlayerReady, onStateChange: onYtStateChange },
     });
 }
 
+function onYtPlayerReady() {
+    ytPlayerReady = true;
+    ytLoadingFromRemote = false;
+    if (pendingYtSync) {
+        const sync = pendingYtSync;
+        pendingYtSync = null;
+        applyRemoteSync(sync);
+    }
+}
+
 function onYtStateChange({ data }) {
-    if (isApplyingSync) return;
-    const now = Date.now();
-    if (now - lastSyncSent < SYNC_THROTTLE_MS) return;
-    lastSyncSent = now;
+    // Suppress echoes while we are applying a remote command or while the player
+    // is auto-starting as a result of a remote "load" command.
+    if (isApplyingSync || ytLoadingFromRemote) return;
     const t = ytPlayer?.getCurrentTime?.() ?? 0;
-    if      (data === YT.PlayerState.PLAYING) wsSend({ type: "sync", action: "play",  time: t });
-    else if (data === YT.PlayerState.PAUSED)  wsSend({ type: "sync", action: "pause", time: t });
+    // Play and pause are discrete state changes that must always be relayed —
+    // do not throttle them (only continuous events like seek are throttled).
+    if (data === YT.PlayerState.PLAYING) {
+        lastSyncSent = Date.now();
+        wsSend({ type: "sync", action: "play",  time: t });
+    } else if (data === YT.PlayerState.PAUSED) {
+        lastSyncSent = Date.now();
+        wsSend({ type: "sync", action: "pause", time: t });
+    }
 }
 
 function loadHtml5Video(url) {
@@ -846,17 +870,20 @@ function loadHtml5Video(url) {
     if (!v) return;
     v.src = safeUrl;
     if (activeScreenPeer === null) v.classList.remove("hidden");
-    v.play().catch(() => {});
+    requestMediaPlayback(v);
 
-    const maybeSend = (action) => {
+    // Play and pause are discrete events — send them immediately without throttle so
+    // that a pause/play is never silently dropped due to a recent seek or load event.
+    v.onplay   = () => {
         if (isApplyingSync) return;
-        const now = Date.now();
-        if (now - lastSyncSent < SYNC_THROTTLE_MS) return;
-        lastSyncSent = now;
-        wsSend({ type: "sync", action, time: v.currentTime });
+        lastSyncSent = Date.now();
+        wsSend({ type: "sync", action: "play",  time: v.currentTime });
     };
-    v.onplay   = () => maybeSend("play");
-    v.onpause  = () => maybeSend("pause");
+    v.onpause  = () => {
+        if (isApplyingSync) return;
+        lastSyncSent = Date.now();
+        wsSend({ type: "sync", action: "pause", time: v.currentTime });
+    };
     v.onseeked = () => {
         if (isApplyingSync) return;
         const now = Date.now();
@@ -873,20 +900,37 @@ function applyRemoteSync(msg) {
         const ytId = getYouTubeId(url);
         if (!ytId && !isSafeMediaUrl(url)) return;
         document.getElementById("urlInput").value = url;
-        isApplyingSync = true;
         currentVideoUrl = url;
-        try {
-            if (ytId) loadYouTube(ytId);
-            else      loadHtml5Video(url);
-        } finally {
-            setTimeout(() => { isApplyingSync = false; }, SYNC_THROTTLE_MS);
+        if (ytId) {
+            // Track whether the player is already functional so we know if onReady
+            // will fire (new player) or not (loadVideoById on existing player).
+            const playerAlreadyReady = ytPlayerReady;
+            ytLoadingFromRemote = true;
+            loadYouTube(ytId);
+            if (playerAlreadyReady) {
+                // Existing player used loadVideoById — onReady will NOT fire again.
+                // Clear the guard after a brief window to cover the player's own events.
+                setTimeout(() => { ytLoadingFromRemote = false; }, APPLY_SYNC_GUARD_MS);
+            }
+            // else: onYtPlayerReady() will clear ytLoadingFromRemote and apply pendingYtSync.
+        } else {
+            isApplyingSync = true;
+            loadHtml5Video(url);
+            setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
         }
         return;
     }
 
-    isApplyingSync = true;
-    try {
-        if (currentVideoType === "youtube" && ytPlayer) {
+    // ── play / pause / seek ────────────────────────────────────────────────
+    if (currentVideoType === "youtube") {
+        if (!ytPlayerReady) {
+            // Player is still initialising — store the latest state; onYtPlayerReady
+            // will apply it once the player is functional.
+            pendingYtSync = msg;
+            return;
+        }
+        isApplyingSync = true;
+        try {
             const cur = ytPlayer.getCurrentTime?.() ?? 0;
             if (msg.action === "play") {
                 if (Math.abs(cur - msg.time) > SYNC_TOLERANCE_S) ytPlayer.seekTo(msg.time, true);
@@ -897,22 +941,27 @@ function applyRemoteSync(msg) {
             } else if (msg.action === "seek") {
                 ytPlayer.seekTo(msg.time, true);
             }
-        } else if (currentVideoType === "html5") {
-            const v = document.getElementById("videoPlayer");
-            if (!v) return;
+        } finally {
+            setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
+        }
+    } else if (currentVideoType === "html5") {
+        const v = document.getElementById("videoPlayer");
+        if (!v) return;
+        isApplyingSync = true;
+        try {
             if (msg.action === "play") {
                 if (Math.abs(v.currentTime - msg.time) > SYNC_TOLERANCE_S) v.currentTime = msg.time;
-                v.play().catch(() => {});
+                requestMediaPlayback(v);
             } else if (msg.action === "pause") {
                 if (Math.abs(v.currentTime - msg.time) > SYNC_TOLERANCE_S) v.currentTime = msg.time;
                 v.pause();
             } else if (msg.action === "seek") {
                 v.currentTime = msg.time;
             }
+        } finally {
+            // Keep guard active long enough that browser events fired by our own seek/play don't echo
+            setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
         }
-    } finally {
-        // Keep guard active long enough that browser events fired by our own seek/play don't echo
-        setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
     }
 }
 
@@ -920,7 +969,7 @@ function sendVideoStateTo(peerId) {
     if (!currentVideoUrl) return;
     wsSend({ to: peerId, type: "sync", action: "load", url: currentVideoUrl });
     setTimeout(() => {
-        if (currentVideoType === "youtube" && ytPlayer && ytReady) {
+        if (currentVideoType === "youtube" && ytPlayer && ytReady && ytPlayerReady) {
             const t = ytPlayer.getCurrentTime?.() ?? 0;
             const paused = ytPlayer.getPlayerState?.() !== YT.PlayerState.PLAYING;
             wsSend({ to: peerId, type: "sync", action: paused ? "pause" : "play", time: t });
