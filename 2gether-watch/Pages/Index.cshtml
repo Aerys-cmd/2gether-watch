@@ -1,5 +1,7 @@
 ﻿@page
 @model IndexModel
+@using Microsoft.Extensions.Options
+@inject IOptions<FeedbackHubOptions> FeedbackHubOptions
 @{
     Layout = null;
 }
@@ -170,7 +172,11 @@
 
         <p class="mt-4 text-center text-slate-500 text-[10px] uppercase tracking-wider">No sign-up required · Free forever</p>
     </div>
-
+    @if (FeedbackHubOptions.Value.Enabled)
+    {
+        <script src="https://feedback-hub.lunavex.com/widget/feedback-widget.js"
+                data-project-key="@FeedbackHubOptions.Value.PublicKey" data-locale="auto"></script>
+    }
     <script>
         // ── Persist display name ───────────────────────────────────────
         const usernameInput = document.getElementById("usernameInput");

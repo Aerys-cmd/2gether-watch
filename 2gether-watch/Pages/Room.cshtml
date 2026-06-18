@@ -1,5 +1,7 @@
 @page "/room/{id?}"
 @model RoomModel
+@using Microsoft.Extensions.Options
+@inject IOptions<FeedbackHubOptions> FeedbackHubOptions
 @{
     Layout = null;
 }
@@ -371,7 +373,11 @@
             &#128682; <span class="hidden sm:inline">Leave</span>
         </a>
     </footer>
-
+    @if (FeedbackHubOptions.Value.Enabled)
+    {
+        <script src="https://feedback-hub.lunavex.com/widget/feedback-widget.js"
+                data-project-key="@FeedbackHubOptions.Value.PublicKey" data-locale="auto"></script>
+    }
     <script>
         const ROOM_ID = "@Model.RoomId";
 

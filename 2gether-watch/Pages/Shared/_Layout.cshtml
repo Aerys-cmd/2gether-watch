@@ -1,6 +1,4 @@
-﻿@using Microsoft.Extensions.Options
-@inject IOptions<FeedbackHubOptions> FeedbackHubOptions
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -19,11 +17,6 @@
             @RenderBody()
         </main>
     </div>
-    @if (FeedbackHubOptions.Value.Enabled)
-    {
-        <script src="https://feedback-hub.lunavex.com/widget/feedback-widget.js"
-                data-project-key="@FeedbackHubOptions.Value.PublicKey" data-locale="auto"></script>
-    }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 
