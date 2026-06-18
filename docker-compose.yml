@@ -5,6 +5,7 @@ services:
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
+      - FeedbackHub__PublicKey=${FEEDBACK_HUB_PUBLIC_KEY:-}
     networks:
       - web
     labels:
