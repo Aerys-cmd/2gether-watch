@@ -16,6 +16,9 @@ builder.Services.AddRazorPages();
 
 builder.Services.AddSingleton<RoomManager>();
 
+builder.Services.AddOptions<FeedbackHubOptions>()
+    .Bind(builder.Configuration.GetSection(FeedbackHubOptions.SectionName));
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

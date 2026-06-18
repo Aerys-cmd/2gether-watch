@@ -1,22 +1,30 @@
-﻿<!DOCTYPE html>
+﻿@using Microsoft.Extensions.Options
+@inject IOptions<FeedbackHubOptions> FeedbackHubOptions
+<!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - 2gether Watch</title>
     <!-- Favicon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="stylesheet" href="~/_2gether_watch.styles.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/_2gether_watch.styles.css" asp-append-version="true" />
 </head>
+
 <body>
-<div class="container">
-    <main role="main" class="pb-3">
-        @RenderBody()
-    </main>
-</div>
-
-
-@await RenderSectionAsync("Scripts", required: false)
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+    @if (FeedbackHubOptions.Value.Enabled)
+    {
+        <script src="https://feedback-hub.lunavex.com/widget/feedback-widget.js"
+                data-project-key="@FeedbackHubOptions.Value.PublicKey" data-locale="auto"></script>
+    }
+    @await RenderSectionAsync("Scripts", required: false)
 </body>
+
 </html>
