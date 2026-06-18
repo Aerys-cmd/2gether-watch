@@ -10,8 +10,10 @@ services:
       - web
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=web"
       - "traefik.http.routers.2gether-watch.rule=Host(`2gether-watch.lunavex.com`)"
       - "traefik.http.routers.2gether-watch.entrypoints=websecure"
+      - "traefik.http.routers.2gether-watch.tls=true"
       - "traefik.http.services.2gether-watch.loadbalancer.server.port=8080"
 
 networks:
