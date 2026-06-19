@@ -1,27 +1,14 @@
 @page "/room/{id?}"
 @model RoomModel
-@using Microsoft.Extensions.Options
-@inject IOptions<FeedbackHubOptions> FeedbackHubOptions
 @{
-    Layout = null;
+    ViewData["Title"] = $"2gether Watch — Room {Model.RoomId}";
+    ViewData["BodyClass"] = "bg-slate-950 text-white flex flex-col overflow-hidden";
+    ViewData["Viewport"] = "width=device-width, initial-scale=1.0, viewport-fit=cover";
 }
 
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>2gether Watch — Room @Model.RoomId</title>
-
-    <!-- Prevent indexing of private room pages -->
+@section Head {
     <meta name="robots" content="noindex, nofollow" />
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
-
-    <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <style>
         /* --footer-h is referenced by both the footer and the mobile chat drawer */
@@ -158,11 +145,9 @@
             transform: translateY(calc(100% + var(--footer-h) + env(safe-area-inset-bottom, 0px)));
         }
     </style>
-</head>
+}
 
-<body class="bg-slate-950 text-white flex flex-col overflow-hidden"
-      x-data="roomApp()"
-      x-init="init()">
+<div class="flex flex-col flex-1 min-h-0 h-full" x-data="roomApp()" x-init="init()">
 
     <!-- Header -->
     <header class="flex-none flex items-center gap-2 px-3 sm:px-5 h-10 bg-slate-900 border-b border-slate-800 z-20">
@@ -373,11 +358,9 @@
             &#128682; <span class="hidden sm:inline">Leave</span>
         </a>
     </footer>
-    @if (FeedbackHubOptions.Value.Enabled)
-    {
-        <script src="https://feedback-hub.lunavex.com/widget/feedback-widget.js"
-                data-project-key="@FeedbackHubOptions.Value.PublicKey" data-locale="auto"></script>
-    }
+</div>
+
+@section Scripts {
     <script>
         const ROOM_ID = "@Model.RoomId";
 
@@ -403,6 +386,4 @@
     </script>
     <script asp-append-version="true" src="/js/webrtc.js"></script>
     <script src="https://www.youtube.com/iframe_api"></script>
-</body>
-
-</html>
+}

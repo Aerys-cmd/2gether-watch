@@ -1,20 +1,11 @@
 ﻿@page
 @model IndexModel
-@using Microsoft.Extensions.Options
-@inject IOptions<FeedbackHubOptions> FeedbackHubOptions
 @{
-    Layout = null;
+    ViewData["Title"] = "2gether Watch — Watch Videos Together in Perfect Sync | Free Watch Party App";
+    ViewData["BodyClass"] = "min-h-screen bg-slate-950 text-white flex items-center justify-center p-4";
 }
 
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>2gether Watch — Watch Videos Together in Perfect Sync | Free Watch Party App</title>
-
-    <!-- Primary Meta Tags -->
+@section Head {
     <meta name="title" content="2gether Watch — Watch Videos Together in Perfect Sync" />
     <meta name="description" content="Watch videos together in perfect sync from anywhere. Free watch party app with audio/video calls, live chat, and screen sharing. No sign-up required. Private, secure, and powered by WebRTC." />
     <meta name="keywords" content="watch together, watch party, video sync, watch videos together, online watch party, video chat, screen sharing, WebRTC, sync video, YouTube watch party, group video watching, free watch party" />
@@ -22,11 +13,6 @@
     <meta name="robots" content="index, follow" />
     <link rel="canonical" href="@Model.BaseUrl/" />
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
-    <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
-
-    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="@Model.BaseUrl/" />
     <meta property="og:title" content="2gether Watch — Watch Videos Together in Perfect Sync" />
@@ -35,14 +21,12 @@
     <meta property="og:site_name" content="2gether Watch" />
     <meta property="og:locale" content="en_US" />
 
-    <!-- Twitter -->
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:url" content="@Model.BaseUrl/" />
     <meta name="twitter:title" content="2gether Watch — Watch Videos Together in Perfect Sync" />
     <meta name="twitter:description" content="Watch videos together in perfect sync from anywhere. Free watch party app with audio/video calls, live chat, and screen sharing. No sign-up required." />
     <meta name="twitter:image" content="@Model.BaseUrl/favicon.ico" />
 
-    <!-- JSON-LD Structured Data -->
     <script type="application/ld+json">
     {
       "@@context": "https://schema.org",
@@ -73,7 +57,6 @@
     }
     </script>
 
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @@keyframes float-up-down {
             0%, 100% { transform: translateY(0px); }
@@ -81,9 +64,7 @@
         }
         .film-frame { animation: float-up-down 3.2s ease-in-out infinite; }
     </style>
-</head>
-
-<body class="min-h-screen bg-slate-950 text-white flex items-center justify-center p-4">
+}
 
     <div class="w-full max-w-xs sm:max-w-sm">
 
@@ -171,12 +152,12 @@
         </div>
 
         <p class="mt-4 text-center text-slate-500 text-[10px] uppercase tracking-wider">No sign-up required · Free forever</p>
+        <p class="mt-2 text-center text-[10px]">
+            <a href="/Privacy" class="text-slate-500 hover:text-slate-300 transition-colors duration-150">Privacy</a>
+        </p>
     </div>
-    @if (FeedbackHubOptions.Value.Enabled)
-    {
-        <script src="https://feedback-hub.lunavex.com/widget/feedback-widget.js"
-                data-project-key="@FeedbackHubOptions.Value.PublicKey" data-locale="auto"></script>
-    }
+
+@section Scripts {
     <script>
         // ── Persist display name ───────────────────────────────────────
         const usernameInput = document.getElementById("usernameInput");
@@ -230,6 +211,4 @@
             if (e.key === "Enter") document.getElementById("btnJoin").click();
         });
     </script>
-</body>
-
-</html>
+}

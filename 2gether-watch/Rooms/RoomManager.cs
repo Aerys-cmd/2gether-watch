@@ -3,7 +3,7 @@ using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 
-namespace _2gether_watch;
+namespace _2gether_watch.Rooms;
 
 /// <summary>
 /// Manages WebSocket signaling rooms for 2gether Watch.

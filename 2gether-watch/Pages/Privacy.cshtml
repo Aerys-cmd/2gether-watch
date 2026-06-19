@@ -1,8 +1,68 @@
 ﻿@page
 @model PrivacyModel
 @{
-    ViewData["Title"] = "Privacy Policy";
+    ViewData["Title"] = "Privacy - 2gether Watch";
+    ViewData["BodyClass"] = "min-h-screen bg-slate-950 text-slate-100";
 }
-<h1>@ViewData["Title"]</h1>
 
-<p>Use this page to detail your site's privacy policy.</p>
+@section Head {
+    <meta name="description" content="Privacy information for 2gether Watch rooms, WebRTC media, chat, video sync, embeds, and optional feedback collection." />
+}
+
+<main class="mx-auto max-w-3xl px-5 py-10 sm:py-14">
+    <a href="/" class="inline-flex items-center text-sm text-slate-400 hover:text-white transition-colors">← Back to 2gether Watch</a>
+
+    <div class="mt-8 space-y-8">
+        <header class="space-y-3">
+            <p class="text-xs uppercase tracking-wider text-slate-500">Privacy</p>
+            <h1 class="text-3xl font-semibold text-white">How 2gether Watch handles your data</h1>
+            <p class="text-slate-400 leading-7">
+                2gether Watch is built for temporary watch rooms without accounts. This page explains what the app needs to make rooms, chat, sync, and calls work.
+            </p>
+        </header>
+
+        <section class="space-y-3">
+            <h2 class="text-lg font-semibold text-white">No Accounts</h2>
+            <p class="text-slate-400 leading-7">
+                You do not create an account to use 2gether Watch. If you enter a display name, it is saved in your browser's <code class="text-slate-200">localStorage</code> so it can be reused on your next visit. You can clear it through your browser storage settings.
+            </p>
+        </section>
+
+        <section class="space-y-3">
+            <h2 class="text-lg font-semibold text-white">Rooms and Messages</h2>
+            <p class="text-slate-400 leading-7">
+                Room IDs are included in room links and used by the server to route WebSocket signaling. The server relays room events, chat messages, video sync commands, and WebRTC setup messages to other peers in the same room.
+            </p>
+            <p class="text-slate-400 leading-7">
+                Rooms are intended to be temporary. Do not put private or sensitive information in a room ID or chat message.
+            </p>
+        </section>
+
+        <section class="space-y-3">
+            <h2 class="text-lg font-semibold text-white">Camera, Microphone, and Screen Sharing</h2>
+            <p class="text-slate-400 leading-7">
+                Your browser asks before granting camera, microphone, or screen sharing access. Media streams are sent peer-to-peer with WebRTC when possible; 2gether Watch uses the server for signaling, not for storing your camera, microphone, or screen media.
+            </p>
+            <p class="text-slate-400 leading-7">
+                WebRTC may expose network information, including IP addresses, to peers or STUN infrastructure as part of connection setup.
+            </p>
+        </section>
+
+        <section class="space-y-3">
+            <h2 class="text-lg font-semibold text-white">Video Providers and Feedback</h2>
+            <p class="text-slate-400 leading-7">
+                If you load a YouTube video, your browser connects to YouTube and Google's embed services under their own privacy practices. Direct video URLs are requested by your browser from the URL you provide.
+            </p>
+            <p class="text-slate-400 leading-7">
+                This site may load the optional FeedbackHub widget when configured by the host. Feedback you submit through that widget is handled by FeedbackHub.
+            </p>
+        </section>
+
+        <section class="space-y-3">
+            <h2 class="text-lg font-semibold text-white">Operational Data</h2>
+            <p class="text-slate-400 leading-7">
+                Like most web apps, the server or hosting provider may process routine technical data such as request times, IP addresses, browser details, and error logs to operate and secure the service.
+            </p>
+        </section>
+    </div>
+</main>

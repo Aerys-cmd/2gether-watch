@@ -1,10 +1,10 @@
 using System.Text.RegularExpressions;
 
-namespace _2gether_watch;
+namespace _2gether_watch.Rooms;
 
 /// <summary>
 /// Shared validation rules used by both the HTTP layer (Room.cshtml.cs) and the
-/// WebSocket layer (RoomManager.cs) to enforce a consistent room-ID format.
+/// WebSocket layer (Rooms/RoomManager.cs) to enforce a consistent room-ID format.
 /// </summary>
 public static partial class RoomValidation
 {
