@@ -72,7 +72,7 @@ Browser A ◀──────────── WebRTC P2P ──────�
           (audio, video, screen — never via server)
 ```
 
-- **Backend**: ASP.NET Core 9 (`Rooms/RoomManager.cs`) — accepts WebSocket connections, assigns peer IDs, relays JSON signaling messages, enforces room capacity
+- **Backend**: ASP.NET Core 10 (`Rooms/RoomManager.cs`) — accepts WebSocket connections, assigns peer IDs, relays JSON signaling messages, enforces room capacity
 - **Frontend**: Vanilla JS + [Alpine.js](https://alpinejs.dev/) + [Tailwind CSS](https://tailwindcss.com/) (CDN) — handles WebRTC negotiation, video sync, chat, and media controls
 - **ICE**: Public Google STUN servers (`stun.l.google.com`) — no TURN server by default
 - **Deployment**: Docker image served behind a Traefik reverse proxy with Let's Encrypt TLS
@@ -89,8 +89,8 @@ See **[docs/SECURITY.md](docs/SECURITY.md)** for a full write-up of the security
 
 | Layer | Technology |
 |---|---|
-| Server | [ASP.NET Core 9](https://learn.microsoft.com/aspnet/core) |
-| Language | C# 13 / .NET 9 |
+| Server | [ASP.NET Core 10](https://learn.microsoft.com/aspnet/core) |
+| Language | C# 14 / .NET 10 |
 | Frontend framework | [Alpine.js 3](https://alpinejs.dev/) |
 | Styling | [Tailwind CSS](https://tailwindcss.com/) (CDN) |
 | Real-time comms | WebRTC (`RTCPeerConnection`, `getUserMedia`, `getDisplayMedia`) |
@@ -101,7 +101,7 @@ See **[docs/SECURITY.md](docs/SECURITY.md)** for a full write-up of the security
 
 ## Development
 
-**Prerequisites**: [.NET 9 SDK](https://dotnet.microsoft.com/download)
+**Prerequisites**: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10)
 
 ```bash
 # Clone the repo

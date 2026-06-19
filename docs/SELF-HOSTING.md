@@ -98,7 +98,7 @@ docker compose up -d
 
 ### Prerequisites
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10)
 - A reverse proxy (nginx, Caddy, Traefik…) in front for HTTPS
 
 ### Steps
