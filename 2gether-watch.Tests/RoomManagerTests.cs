@@ -1,5 +1,6 @@
 using System.Net.WebSockets;
 using System.Text.Json;
+using _2gether_watch.Rooms;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 

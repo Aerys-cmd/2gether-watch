@@ -1,4 +1,4 @@
-using _2gether_watch;
+using _2gether_watch.Rooms;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 

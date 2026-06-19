@@ -72,7 +72,7 @@ Browser A ◀──────────── WebRTC P2P ──────�
           (audio, video, screen — never via server)
 ```
 
-- **Backend**: ASP.NET Core 9 (`RoomManager.cs`) — accepts WebSocket connections, assigns peer IDs, relays JSON signaling messages, enforces room capacity
+- **Backend**: ASP.NET Core 9 (`Rooms/RoomManager.cs`) — accepts WebSocket connections, assigns peer IDs, relays JSON signaling messages, enforces room capacity
 - **Frontend**: Vanilla JS + [Alpine.js](https://alpinejs.dev/) + [Tailwind CSS](https://tailwindcss.com/) (CDN) — handles WebRTC negotiation, video sync, chat, and media controls
 - **ICE**: Public Google STUN servers (`stun.l.google.com`) — no TURN server by default
 - **Deployment**: Docker image served behind a Traefik reverse proxy with Let's Encrypt TLS
