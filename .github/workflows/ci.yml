@@ -43,6 +43,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
       - name: Restore
         run: dotnet restore 2gether-watch.sln
 
@@ -68,6 +75,13 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', 'global.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -78,6 +92,12 @@ jobs:
       - name: Install frontend test dependencies
         working-directory: frontend-tests
         run: npm ci
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('frontend-tests/package-lock.json') }}
 
       - name: Install Playwright browser
         working-directory: frontend-tests
