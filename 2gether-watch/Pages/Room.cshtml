@@ -210,6 +210,9 @@
         </div>
     </header>
 
+    <!-- Mobile hint: URL bar is hidden on touch devices (no getDisplayMedia + no arbitrary URL loading) -->
+    <p class="mobile-hint shrink-0 text-[10px] text-slate-500 px-3 py-1.5 bg-slate-900 border-b border-slate-800">Load video from a desktop — or ask someone in the room to share their screen.</p>
+
     <!-- URL Bar -->
     <div id="urlBar" class="flex-none flex items-center px-3 py-1.5 bg-slate-900 border-b border-slate-800 z-10 gap-0">
         <input id="urlInput" type="text"
@@ -237,12 +240,14 @@
                    class="hidden absolute inset-0 w-full h-full object-contain"></video>
             <!-- Empty-stage placeholder -->
             <div id="stagePlaceholder"
-                class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
-                <div class="border border-slate-800 bg-slate-950/60 p-6 flex flex-col items-center gap-2.5">
-                    <span class="text-5xl opacity-20">&#127916;</span>
-                    <p class="text-xs text-slate-500 text-center desktop-hint leading-relaxed">Paste a video URL above or share your screen<br/>to start watching together</p>
-                    <p class="text-xs text-slate-500 text-center mobile-hint">Waiting for video or screen share…</p>
-                </div>
+                class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none gap-1.5">
+                <p class="text-sm text-slate-400 text-center leading-relaxed desktop-hint">Paste a video URL above<br/>or share your screen</p>
+                <p class="text-sm text-slate-400 text-center mobile-hint">Waiting for video or screen share…</p>
+                <p class="text-xs text-slate-600 text-center" x-show="peerCount === 0" style="display:none">Share the link above to invite others</p>
+            </div>
+            <!-- Autoplay nudge (shown by JS when browser blocks autoplay) -->
+            <div id="autoplayNudge" class="hidden absolute inset-x-0 bottom-3 flex justify-center z-20 pointer-events-none">
+                <span class="text-xs bg-slate-900/90 border border-slate-700 text-slate-300 px-3 py-1.5">Tap anywhere to enable video</span>
             </div>
         </div>
 

@@ -1,26 +1,23 @@
-﻿@page
+@page
 @model ErrorModel
 @{
-    ViewData["Title"] = "Error";
+    ViewData["Title"] = "Error — 2gether Watch";
+    ViewData["BodyClass"] = "min-h-screen bg-slate-950 text-white flex items-center justify-center p-4";
 }
 
-<h1 class="text-danger">Error.</h1>
-<h2 class="text-danger">An error occurred while processing your request.</h2>
-
-@if (Model.ShowRequestId)
-{
-    <p>
-        <strong>Request ID:</strong> <code>@Model.RequestId</code>
-    </p>
-}
-
-<h3>Development Mode</h3>
-<p>
-    Swapping to the <strong>Development</strong> environment displays detailed information about the error that occurred.
-</p>
-<p>
-    <strong>The Development environment shouldn't be enabled for deployed applications.</strong>
-    It can result in displaying sensitive information from exceptions to end users.
-    For local debugging, enable the <strong>Development</strong> environment by setting the <strong>ASPNETCORE_ENVIRONMENT</strong> environment variable to <strong>Development</strong>
-    and restarting the app.
-</p>
+<div class="w-full max-w-xs sm:max-w-sm text-center space-y-5">
+    <a href="/" class="hover:opacity-75 transition-opacity duration-150 block">
+        <img src="/logo.svg" alt="2gWatch" width="360" height="96" class="w-48 mx-auto opacity-50" />
+    </a>
+    <div class="bg-slate-900 border border-slate-700/60 p-6 space-y-3">
+        <p class="text-slate-200 text-sm font-semibold">Something went wrong</p>
+        @if (Model.ShowRequestId)
+        {
+            <p class="text-slate-500 text-[10px] font-mono break-all">Request ID: @Model.RequestId</p>
+        }
+        <a href="/"
+            class="inline-block mt-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 border border-indigo-600 hover:border-indigo-500 text-sm font-semibold transition-colors duration-150">
+            ← Back to home
+        </a>
+    </div>
+</div>
