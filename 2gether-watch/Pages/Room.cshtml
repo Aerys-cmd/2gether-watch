@@ -174,22 +174,27 @@
         <!-- Landscape controls: compact icon buttons shown only in mobile landscape via CSS -->
         <div id="landscapeControls" class="flex items-center gap-1 shrink-0" style="display: none;">
             <button @@click="$rtc.toggleMic()"
-                class="h-8 w-8 flex items-center justify-center text-sm border transition-colors duration-150"
+                class="h-8 w-8 flex items-center justify-center border transition-colors duration-150"
                 :class="micActive ? 'bg-slate-700 border-slate-600 text-slate-100' : 'bg-red-900 border-red-700 text-red-300'"
                 :title="micActive ? 'Mute microphone' : 'Unmute microphone'">
-                <span x-text="micActive ? '🎤' : '🔇'"></span>
+                <span x-show="micActive">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </span>
+                <span x-show="!micActive" style="display:none">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </span>
             </button>
             <button @@click="$rtc.toggleCamera()"
-                class="h-8 w-8 flex items-center justify-center text-sm border transition-colors duration-150"
+                class="h-8 w-8 flex items-center justify-center border transition-colors duration-150"
                 :class="camActive ? 'bg-sky-800 border-sky-700 text-sky-200' : 'bg-slate-700 border-slate-600 text-slate-400'"
                 :title="camActive ? 'Stop camera' : 'Start camera'">
-                &#127909;
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
             </button>
             <div class="relative">
                 <button id="btnChatLandscape"
-                    class="h-8 w-8 flex items-center justify-center text-sm border bg-slate-700 border-slate-600 text-slate-300 hover:text-white hover:bg-slate-600 transition-colors duration-150"
+                    class="h-8 w-8 flex items-center justify-center border bg-slate-700 border-slate-600 text-slate-300 hover:text-white hover:bg-slate-600 transition-colors duration-150"
                     title="Chat">
-                    &#128172;
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 </button>
                 <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500 text-[8px] flex items-center justify-center font-bold pointer-events-none"
                     x-show="unreadCount > 0"
@@ -197,9 +202,9 @@
                     style="display: none;"></span>
             </div>
             <a href="/"
-                class="h-8 w-8 flex items-center justify-center text-sm border bg-red-900 border-red-700 text-red-300 hover:bg-red-800 transition-colors duration-150"
+                class="h-8 w-8 flex items-center justify-center border bg-red-900 border-red-700 text-red-300 hover:bg-red-800 transition-colors duration-150"
                 title="Leave room">
-                &#128682;
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </a>
         </div>
 
@@ -267,7 +272,9 @@
                 <div id="localCamTile" class="relative flex-none bg-slate-800 overflow-hidden cam-tile w-28 lg:w-full shrink-0">
                     <video id="localCam" autoplay playsinline muted
                         class="absolute inset-0 w-full h-full object-cover -scale-x-100"></video>
-                    <div id="localCamPh" class="cam-ph absolute inset-0" aria-label="Local camera inactive" role="img">&#127910;</div>
+                    <div id="localCamPh" class="cam-ph absolute inset-0" aria-label="Local camera inactive" role="img">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    </div>
                     <span class="vid-label" id="localLabel">You</span>
                 </div>
 
@@ -285,8 +292,8 @@
                         class="flex-1 h-8 text-xs bg-slate-800 border-0 px-3 text-slate-100
                                placeholder-slate-500 focus:outline-none focus:bg-slate-700 transition-colors duration-150 min-w-0" />
                     <button id="btnSendChat"
-                        class="shrink-0 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 text-xs transition-colors duration-150 border-l border-slate-700">
-                        &#10148;
+                        class="shrink-0 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 transition-colors duration-150 border-l border-slate-700 flex items-center justify-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                     </button>
                 </div>
             </div>
@@ -301,7 +308,9 @@
         style="bottom: calc(var(--footer-h) + env(safe-area-inset-bottom, 0px));">
         <div class="flex items-center justify-between px-3 py-1.5 border-b border-slate-800 shrink-0 border-l-2 border-l-indigo-500">
             <span class="text-[10px] text-slate-300 uppercase tracking-wider font-medium">Chat</span>
-            <button id="btnCloseChat" class="h-6 w-6 flex items-center justify-center text-slate-500 hover:text-slate-200 transition-colors duration-150 text-xs">&#10005;</button>
+            <button id="btnCloseChat" class="h-6 w-6 flex items-center justify-center text-slate-500 hover:text-slate-200 transition-colors duration-150">
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
         <div id="chatMessagesMobile" class="flex-1 overflow-y-auto px-3 py-2 space-y-1.5"></div>
         <div class="flex border-t border-slate-800 shrink-0">
@@ -309,8 +318,8 @@
                 class="flex-1 h-8 text-xs bg-slate-800 border-0 px-3 text-slate-100
                        placeholder-slate-500 focus:outline-none focus:bg-slate-700 transition-colors duration-150 min-w-0" />
             <button id="btnSendChatMobile"
-                class="shrink-0 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 text-xs transition-colors duration-150 border-l border-slate-700">
-                &#10148;
+                class="shrink-0 h-8 px-3 bg-indigo-600 hover:bg-indigo-500 transition-colors duration-150 border-l border-slate-700 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
             </button>
         </div>
     </div>
@@ -323,7 +332,12 @@
             class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border transition-colors duration-150"
             :class="micActive ? 'bg-slate-700 border-slate-600 text-slate-100 hover:bg-slate-600' : 'bg-red-900 border-red-700 text-red-300 hover:bg-red-800'"
             :title="micActive ? 'Mute microphone' : 'Unmute microphone'">
-            <span x-text="micActive ? '🎤' : '🔇'"></span>
+            <span x-show="micActive">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </span>
+            <span x-show="!micActive" style="display:none">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </span>
             <span class="hidden sm:inline" x-text="micActive ? 'Mic' : 'Unmute'"></span>
         </button>
 
@@ -331,7 +345,8 @@
             class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border transition-colors duration-150"
             :class="camActive ? 'bg-sky-800 border-sky-700 text-sky-100 hover:bg-sky-700' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'"
             :title="camActive ? 'Stop camera' : 'Start camera'">
-            &#127909; <span class="hidden sm:inline" x-text="camActive ? 'Stop Cam' : 'Camera'"></span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <span class="hidden sm:inline" x-text="camActive ? 'Stop Cam' : 'Camera'"></span>
         </button>
 
         <button id="btnScreenShare"
@@ -339,14 +354,15 @@
             class="hidden sm:flex h-8 items-center gap-1.5 px-3 text-xs font-medium border transition-colors duration-150"
             :class="screenActive ? 'bg-indigo-700 border-indigo-600 text-indigo-100 hover:bg-indigo-600' : 'bg-slate-700 border-slate-600 text-slate-400 hover:bg-slate-600'"
             :title="screenActive ? 'Stop screen share' : 'Share screen'">
-            &#128187; <span class="hidden sm:inline" x-text="screenActive ? 'Stop Share' : 'Screen'"></span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="17 8 22 3"/><polyline points="17 3 22 3 22 8"/></svg>
+            <span class="hidden sm:inline" x-text="screenActive ? 'Stop Share' : 'Screen'"></span>
         </button>
 
         <!-- Chat toggle (mobile only) -->
         <div class="relative lg:hidden">
             <button id="btnChat"
                 class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border border-slate-600 bg-slate-700 text-slate-300 hover:bg-slate-600 hover:text-white transition-colors duration-150">
-                &#128172;
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </button>
             <span id="chatBadge"
                 class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-red-500
@@ -360,7 +376,8 @@
 
         <a href="/"
             class="h-8 flex items-center gap-1.5 px-3 text-xs font-medium border border-red-700 bg-red-900 text-red-300 hover:bg-red-800 transition-colors duration-150">
-            &#128682; <span class="hidden sm:inline">Leave</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span class="hidden sm:inline">Leave</span>
         </a>
     </footer>
 </div>
