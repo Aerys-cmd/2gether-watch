@@ -71,7 +71,9 @@
         <!-- Room-full banner (shown when redirected from a full room) -->
         <div id="roomFullBanner" class="hidden mb-4 px-4 py-2 bg-amber-950 border border-amber-800 text-amber-300 text-xs text-center flex items-center justify-between gap-2">
             <span>That room is full — create your own or try a different ID.</span>
-            <button onclick="this.parentElement.classList.add('hidden')" class="shrink-0 text-amber-500 hover:text-amber-200 transition-colors duration-150">&#10005;</button>
+            <button onclick="this.parentElement.classList.add('hidden')" class="shrink-0 text-amber-500 hover:text-amber-200 transition-colors duration-150">
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         </div>
 
         <!-- Animated logo -->
@@ -137,19 +139,27 @@
         <!-- Feature row -->
         <div class="mt-3 grid grid-cols-4 gap-1.5 text-center">
             <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
-                <div class="text-base mb-0.5">🔒</div>
+                <div class="flex justify-center mb-1 text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
                 <div class="text-[10px] text-slate-400">Private</div>
             </div>
             <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
-                <div class="text-base mb-0.5">▶️</div>
+                <div class="flex justify-center mb-1 text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                </div>
                 <div class="text-[10px] text-slate-400">Synced</div>
             </div>
             <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
-                <div class="text-base mb-0.5">💬</div>
+                <div class="flex justify-center mb-1 text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
                 <div class="text-[10px] text-slate-400">Chat</div>
             </div>
             <div class="bg-slate-900 border border-slate-700/60 py-2.5 px-1">
-                <div class="text-base mb-0.5">🖥️</div>
+                <div class="flex justify-center mb-1 text-slate-400">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
                 <div class="text-[10px] text-slate-400">Screen</div>
             </div>
         </div>

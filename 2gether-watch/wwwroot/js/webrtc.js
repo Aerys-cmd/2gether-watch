@@ -113,7 +113,7 @@ async function onWsMessage(event) {
                 if (pid) ensurePeerState(pid);
             }
         }
-        setState({ status: idList ? "Connected 🎉" : "Waiting for others…", statusColor: idList ? "green" : "amber" });
+        setState({ status: idList ? "Connected" : "Waiting for others…", statusColor: idList ? "green" : "amber" });
         return;
     }
 
@@ -122,7 +122,7 @@ async function onWsMessage(event) {
         // Existing peers are the designated offerers for newcomers.
         await initiateConnection(pid);
         appendSystemMessage("Someone joined");
-        setState({ status: "Connected 🎉", statusColor: "green", peerCount: peerStates.size });
+        setState({ status: "Connected", statusColor: "green", peerCount: peerStates.size });
         return;
     }
 
@@ -131,7 +131,7 @@ async function onWsMessage(event) {
         const leavingName = peerStates.get(pid)?.username ?? "Someone";
         closePeer(pid);
         appendSystemMessage(leavingName + " left");
-        setState({ status: peerStates.size > 0 ? "Connected 🎉" : "Waiting for others…",
+        setState({ status: peerStates.size > 0 ? "Connected" : "Waiting for others…",
                    statusColor: peerStates.size > 0 ? "green" : "amber",
                    peerCount: peerStates.size });
         return;
@@ -566,7 +566,7 @@ function addPeerCamTile(peerId, state) {
     ph.id = `cam-ph-${peerId}`;
     ph.className = "cam-ph absolute inset-0";
     ph.setAttribute("aria-label", "Remote camera inactive");
-    ph.textContent = "👤";
+    ph.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 
     const label = document.createElement("span");
     label.className = "vid-label";
