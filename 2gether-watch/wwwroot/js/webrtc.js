@@ -476,6 +476,7 @@ async function toggleScreenShare() {
         addLocalTracksToPeers(localScreenStream);
         applyScreenEncodings();
         broadcastStreamMap();
+        setRemoteScreen("local", localScreenStream);
         setState({ screenActive: true });
     } catch (e) {
         if (e.name !== "NotAllowedError") console.error("Screen share:", e);
@@ -486,6 +487,7 @@ function stopScreenShare() {
     if (!localScreenStream) return;
     localScreenStream.getTracks().forEach(t => t.stop());
     removeLocalTracksFromPeers(localScreenStream);
+    clearRemoteScreen("local");
     wsSend({ type: "screen-off" });
     localScreenStream = null;
     setState({ screenActive: false });
@@ -722,7 +724,11 @@ function clearRemoteScreen(peerId) {
     activeScreenPeer = null;
     const v = document.getElementById("remoteScreen");
     if (v) { v.srcObject = null; v.classList.add("hidden"); }
-    restoreLocalVideo();
+    if (localScreenStream) {
+        setRemoteScreen("local", localScreenStream);
+    } else {
+        restoreLocalVideo();
+    }
 }
 
 function hideVideoOverlays(ids) {

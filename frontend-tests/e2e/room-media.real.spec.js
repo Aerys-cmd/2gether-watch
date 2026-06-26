@@ -147,4 +147,128 @@ test("@real-live late joiner receives remote screen share", async ({ browser }) 
   await ctxB.close();
 });
 
+test("@real-live sharer sees own screen in stage area", async ({ browser }) => {
+  const id = roomId();
+
+  const ctxA = await browser.newContext({ permissions: ["camera", "microphone"] });
+  const pageA = await ctxA.newPage();
+
+  await waitForBootstrap(pageA, id);
+  await pageA.evaluate(() => window.rtcActions.toggleScreenShare());
+
+  await expectRemoteScreenLive(pageA);
+
+  await ctxA.close();
+});
+
+test("@real-live screen share overrides video embed for sharer", async ({ browser }) => {
+  const id = roomId();
+
+  const ctxA = await browser.newContext({ permissions: ["camera", "microphone"] });
+  const pageA = await ctxA.newPage();
+
+  await waitForBootstrap(pageA, id);
+
+  // Load a video first so the embed is visible
+  await pageA.evaluate(() =>
+    window.rtcActions.loadVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+  );
+
+  await expect
+    .poll(
+      () =>
+        pageA.evaluate(() => {
+          const el = document.getElementById("ytPlayerContainer");
+          return el && !el.classList.contains("hidden");
+        }),
+      { timeout: 10_000 }
+    )
+    .toBe(true);
+
+  // Start screen share — embed should disappear, screen should appear
+  await pageA.evaluate(() => window.rtcActions.toggleScreenShare());
+
+  await expect
+    .poll(
+      () =>
+        pageA.evaluate(() => {
+          const embed = document.getElementById("ytPlayerContainer");
+          const screen = document.getElementById("remoteScreen");
+          return (
+            embed?.classList.contains("hidden") &&
+            screen &&
+            !screen.classList.contains("hidden")
+          );
+        }),
+      { timeout: 15_000 }
+    )
+    .toBe(true);
+
+  await ctxA.close();
+});
+
+test("@real-live stopping screen share restores video embed", async ({ browser }) => {
+  const id = roomId();
+
+  const ctxA = await browser.newContext({ permissions: ["camera", "microphone"] });
+  const pageA = await ctxA.newPage();
+
+  await waitForBootstrap(pageA, id);
+
+  await pageA.evaluate(() =>
+    window.rtcActions.loadVideoUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+  );
+
+  await pageA.evaluate(() => window.rtcActions.toggleScreenShare());
+  await expectRemoteScreenLive(pageA);
+
+  // Stop screen share — embed should come back, screen should hide
+  await pageA.evaluate(() => window.rtcActions.toggleScreenShare());
+
+  await expect
+    .poll(
+      () =>
+        pageA.evaluate(() => {
+          const screen = document.getElementById("remoteScreen");
+          const embed = document.getElementById("ytPlayerContainer");
+          return (
+            screen?.classList.contains("hidden") &&
+            embed &&
+            !embed.classList.contains("hidden")
+          );
+        }),
+      { timeout: 15_000 }
+    )
+    .toBe(true);
+
+  await ctxA.close();
+});
+
+test("@real-live remote screen stop restores sharer own screen", async ({ browser }) => {
+  const id = roomId();
+
+  const ctxA = await browser.newContext({ permissions: ["camera", "microphone"] });
+  const ctxB = await browser.newContext({ permissions: ["camera", "microphone"] });
+  const pageA = await ctxA.newPage();
+  const pageB = await ctxB.newPage();
+
+  await waitForBootstrap(pageA, id);
+  await pageA.evaluate(() => window.rtcActions.toggleScreenShare());
+
+  await pageA.waitForTimeout(3_000);
+  await waitForBootstrap(pageB, id);
+
+  // Peer B also starts screen share — overrides peer A's view
+  await pageB.evaluate(() => window.rtcActions.toggleScreenShare());
+  await pageA.waitForTimeout(3_000);
+
+  // Peer B stops — peer A's own screen should re-appear in their stage
+  await pageB.evaluate(() => window.rtcActions.toggleScreenShare());
+
+  await expectRemoteScreenLive(pageA);
+
+  await ctxA.close();
+  await ctxB.close();
+});
+
 
