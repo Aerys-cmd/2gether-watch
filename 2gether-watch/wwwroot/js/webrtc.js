@@ -487,9 +487,10 @@ function stopScreenShare() {
     if (!localScreenStream) return;
     localScreenStream.getTracks().forEach(t => t.stop());
     removeLocalTracksFromPeers(localScreenStream);
-    clearRemoteScreen("local");
     wsSend({ type: "screen-off" });
     localScreenStream = null;
+    clearRemoteScreen("local");
+    wsSend({ type: "screen-off" });
     setState({ screenActive: false });
 }
 
@@ -1163,7 +1164,7 @@ function initWebRTC() {
     });
 
     // Expose actions to Alpine
-    window.rtcActions = { toggleMic, toggleCamera, toggleScreenShare };
+    window.rtcActions = { toggleMic, toggleCamera, toggleScreenShare, loadVideoUrl };
 }
 
 document.addEventListener("DOMContentLoaded", initWebRTC);
