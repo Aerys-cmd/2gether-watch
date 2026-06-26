@@ -47,6 +47,7 @@ function requestMediaPlayback(el) {
         p.catch(() => {
             pendingAutoplayEls.add(el);
             bindAutoplayUnlock();
+            document.getElementById("autoplayNudge")?.classList.remove("hidden");
         });
     }
 }
@@ -64,6 +65,7 @@ function bindAutoplayUnlock() {
                 pendingAutoplayEls.delete(el);
             }
         }
+        document.getElementById("autoplayNudge")?.classList.add("hidden");
     };
 
     // Use broad interaction hooks so one tap/click unblocks pending remote media.
@@ -119,13 +121,16 @@ async function onWsMessage(event) {
         const pid = raw.slice(12);
         // Existing peers are the designated offerers for newcomers.
         await initiateConnection(pid);
+        appendSystemMessage("Someone joined");
         setState({ status: "Connected 🎉", statusColor: "green", peerCount: peerStates.size });
         return;
     }
 
     if (raw.startsWith("peer-left:")) {
         const pid = raw.slice(10);
+        const leavingName = peerStates.get(pid)?.username ?? "Someone";
         closePeer(pid);
+        appendSystemMessage(leavingName + " left");
         setState({ status: peerStates.size > 0 ? "Connected 🎉" : "Waiting for others…",
                    statusColor: peerStates.size > 0 ? "green" : "amber",
                    peerCount: peerStates.size });
@@ -134,7 +139,8 @@ async function onWsMessage(event) {
 
     if (raw.startsWith("error:room-full")) {
         setState({ status: "Room is full (max 10 participants).", statusColor: "red" });
-        showError("This room is full. Maximum 10 participants are allowed.");
+        showError("This room is full — redirecting you home…");
+        setTimeout(() => { window.location.href = "/?roomFull=1"; }, 3000);
         return;
     }
 
@@ -196,7 +202,7 @@ function ensurePeerState(peerId) {
             streamKindMap: {},
             remoteVideoStreams: {},
             pendingCandidates: [],
-            username: "Viewer",
+            username: peerId.slice(0, 6),
             camEl: null,
             audioEl: null,
         };
@@ -1036,6 +1042,18 @@ function buildChatItem(name, text, ts, isSelf) {
     return div;
 }
 
+function appendSystemMessage(text) {
+    const item = document.createElement("div");
+    item.className = "text-center text-[10px] text-slate-600 italic py-0.5";
+    item.textContent = text;
+    for (const id of ["chatMessages", "chatMessagesMobile"]) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        el.appendChild(item.cloneNode(true));
+        el.scrollTop = el.scrollHeight;
+    }
+}
+
 // ── UI helpers ────────────────────────────────────────────────────────────────
 function showError(message) {
     const toast = document.createElement("div");
@@ -1121,15 +1139,20 @@ function initWebRTC() {
     // Copy room link
     document.getElementById("btnCopyLink")?.addEventListener("click", () => {
         const btn = document.getElementById("btnCopyLink");
-        const reset = () => setTimeout(() => (btn.textContent = "📋"), 1600);
+        const onCopied = (ok) => {
+            if (!ok) return;
+            btn.classList.add("text-green-400");
+            btn.title = "Copied!";
+            setTimeout(() => {
+                btn.classList.remove("text-green-400");
+                btn.title = "Copy invite link";
+            }, 1600);
+        };
         const url = location.href;
         if (navigator.clipboard?.writeText) {
-            navigator.clipboard.writeText(url)
-                .then(() => { btn.textContent = "✅"; reset(); })
-                .catch(() => { btn.textContent = fallbackCopy(url) ? "✅" : "❌"; reset(); });
+            navigator.clipboard.writeText(url).then(() => onCopied(true)).catch(() => onCopied(fallbackCopy(url)));
         } else {
-            btn.textContent = fallbackCopy(url) ? "✅" : "❌";
-            reset();
+            onCopied(fallbackCopy(url));
         }
     });
 

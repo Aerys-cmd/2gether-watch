@@ -68,14 +68,17 @@
 
     <div class="w-full max-w-xs sm:max-w-sm">
 
+        <!-- Room-full banner (shown when redirected from a full room) -->
+        <div id="roomFullBanner" class="hidden mb-4 px-4 py-2 bg-amber-950 border border-amber-800 text-amber-300 text-xs text-center flex items-center justify-between gap-2">
+            <span>That room is full — create your own or try a different ID.</span>
+            <button onclick="this.parentElement.classList.add('hidden')" class="shrink-0 text-amber-500 hover:text-amber-200 transition-colors duration-150">&#10005;</button>
+        </div>
+
         <!-- Animated logo -->
         <div class="flex justify-center mb-5 select-none">
             <div class="film-frame">
                 <a href="/" class="hover:opacity-85 transition-opacity duration-150 block">
-                    <!-- width/height match the SVG's natural ratio (360×96) so the browser
-                         reserves the right amount of space before the file loads (no CLS).
-                         The CSS class makes it fluid within its container. -->
-                    <img src="/logo.svg" alt="2gWatch" width="360" height="96" class="w-full" />
+                   <img src="/logo.svg" alt="2gWatch" width="360" height="96" class="w-full" />
                 </a>
             </div>
         </div>
@@ -159,6 +162,10 @@
 
 @section Scripts {
     <script>
+        // ── Room-full redirect banner ──────────────────────────────────
+        if (new URLSearchParams(location.search).get("roomFull") === "1")
+            document.getElementById("roomFullBanner")?.classList.remove("hidden");
+
         // ── Persist display name ───────────────────────────────────────
         const usernameInput = document.getElementById("usernameInput");
         const saved = localStorage.getItem("2gw_username");
