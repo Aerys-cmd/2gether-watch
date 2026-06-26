@@ -45,7 +45,7 @@
 
         /* Camera tile — base sizes */
         .cam-tile { height: 7rem; }
-        @@media (min-width: 1024px) { .cam-tile { height: 7rem; width: 100%; } }
+        @@media (min-width: 1024px) { .cam-tile { height: auto; width: 100%; aspect-ratio: 16 / 9; } }
 
         /* ── Mobile / touch-device overrides ─────────────────────────────────
            Mobile browsers cannot load arbitrary video URLs and do not support
@@ -261,7 +261,7 @@
             <!-- Camera tiles — scrollable strip (mobile: horizontal, desktop: vertical) -->
             <div id="camGrid"
                  class="flex flex-row lg:flex-col flex-none overflow-x-auto lg:overflow-x-hidden overflow-y-hidden lg:overflow-y-auto
-                        border-b border-slate-800 lg:max-h-72">
+                        border-b border-slate-800 lg:max-h-96">
 
                 <!-- Local cam tile (always present) -->
                 <div id="localCamTile" class="relative flex-none bg-slate-800 overflow-hidden cam-tile w-28 lg:w-full shrink-0">

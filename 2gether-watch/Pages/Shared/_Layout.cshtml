@@ -14,7 +14,31 @@
     <title>@title</title>
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="shortcut icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    slate: {
+                        100: '#dce4f2', 200: '#c0cfe3', 300: '#9fb3cc',
+                        400: '#7a90ae', 500: '#546884', 600: '#2b3f5c',
+                        700: '#22304a', 800: '#18202e', 900: '#111827', 950: '#0c1018',
+                    },
+                    indigo: {
+                        100: '#fff8e8', 500: '#e8a22a', 600: '#c8871e',
+                        700: '#a06714', 800: '#7a4d0c', 900: '#4a2e07',
+                    },
+                },
+                fontFamily: {
+                    mono: ['Space Mono', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+                },
+            },
+        },
+    };
+    </script>
     @await RenderSectionAsync("Head", required: false)
 </head>
 
