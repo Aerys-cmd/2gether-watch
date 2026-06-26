@@ -487,6 +487,7 @@ function stopScreenShare() {
     if (!localScreenStream) return;
     localScreenStream.getTracks().forEach(t => t.stop());
     removeLocalTracksFromPeers(localScreenStream);
+    wsSend({ type: "screen-off" });
     localScreenStream = null;
     clearRemoteScreen("local");
     wsSend({ type: "screen-off" });
