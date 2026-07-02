@@ -1,5 +1,5 @@
 ﻿@using Microsoft.Extensions.Options
-@inject IOptions<FeedbackHubOptions> FeedbackHubOptions
+@inject IOptions<SaySiftOptions> SaySiftOptions
 @{
     var title = ViewData["Title"] as string ?? "2gether Watch";
     var bodyClass = ViewData["BodyClass"] as string ?? "min-h-screen bg-slate-950 text-slate-100";
@@ -44,10 +44,10 @@
 
 <body class="@bodyClass">
     @RenderBody()
-    @if (FeedbackHubOptions.Value.Enabled)
+    @if (SaySiftOptions.Value.Enabled)
     {
         <script src="https://saysift.com/widget/feedback-widget.js"
-                data-project-key="@FeedbackHubOptions.Value.PublicKey" data-locale="auto"></script>
+                data-project-key="@SaySiftOptions.Value.PublicKey" data-locale="auto"></script>
     }
     @await RenderSectionAsync("Scripts", required: false)
 </body>
