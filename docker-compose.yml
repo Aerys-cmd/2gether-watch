@@ -5,7 +5,7 @@ services:
     environment:
       - ASPNETCORE_URLS=http://+:8080
       - ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
-      - FeedbackHub__PublicKey=${FEEDBACKHUB_PUBLIC_KEY:-}
+      - SaySift__PublicKey=${SAYSIFT_PUBLIC_KEY:-}
       - GoogleAnalytics__MeasurementId=${GA_MEASUREMENT_ID:-}
     networks:
       - web
