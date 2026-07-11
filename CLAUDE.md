@@ -36,6 +36,6 @@ npx playwright test e2e/video-sync.spec.js
 
 **Room ID validation** — `RoomValidation.RoomIdPattern()` (`[A-Za-z0-9_-]{1,64}`) is shared between `Room.cshtml.cs` (HTTP) and `RoomManager` (WebSocket). Update both sides together if the pattern changes.
 
-**Deployment** — Docker image pushed to GHCR on release, deployed to a VPS behind Traefik via `docker-compose.yml`. `SaySift__PublicKey` is the only optional runtime secret.
+**Deployment** — Docker image pushed to GHCR on release, deployed to a VPS behind Traefik via `docker-compose.yml`. `FeedbackHub__PublicKey` is the only optional runtime secret.
 
 **E2E test strategy** — two-peer tests open two browser contexts and go through the real WS relay. Single-peer tests use `page.on("websocket")` to capture outbound frames. `applyRemoteSync` is called directly as a global function to test the receiving side in isolation.
