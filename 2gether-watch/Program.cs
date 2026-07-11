@@ -14,8 +14,8 @@ builder.Services.AddRazorPages();
 
 builder.Services.AddSingleton<RoomManager>();
 
-builder.Services.AddOptions<SaySiftOptions>()
-    .Bind(builder.Configuration.GetSection(SaySiftOptions.SectionName));
+builder.Services.AddOptions<FeedbackHubOptions>()
+    .Bind(builder.Configuration.GetSection(FeedbackHubOptions.SectionName));
 
 var app = builder.Build();
 
