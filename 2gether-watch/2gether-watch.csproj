@@ -14,4 +14,12 @@
       </Content>
     </ItemGroup>
 
+    <ItemGroup>
+      <PackageReference Include="Markdig" Version="1.3.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Include="Content\blog\**\*.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+
 </Project>

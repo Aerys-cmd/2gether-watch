@@ -1,0 +1,34 @@
+@page "/blog/{slug}"
+@model _2gether_watch.Pages.Blog.PostModel
+@{
+    ViewData["Title"] = $"{Model.Post.Title} - 2gether Watch Blog";
+    ViewData["BodyClass"] = "min-h-screen bg-slate-950 text-slate-100";
+}
+
+@section Head {
+    <meta name="description" content="@Model.Post.Description" />
+    <link rel="canonical" href="@Model.BaseUrl/blog/@Model.Post.Slug" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="@Model.Post.Title" />
+    <meta property="og:description" content="@Model.Post.Description" />
+    <meta property="og:url" content="@Model.BaseUrl/blog/@Model.Post.Slug" />
+
+    <script type="application/ld+json">@Html.Raw(Model.JsonLd)</script>
+}
+
+<main class="mx-auto max-w-3xl px-5 py-10 sm:py-14">
+    <a href="/blog" class="inline-flex items-center text-sm text-slate-400 hover:text-white transition-colors">← Back to Blog</a>
+
+    <article class="mt-8">
+        <header class="space-y-3">
+            <p class="text-xs uppercase tracking-wider text-slate-500">@Model.Post.Date.ToString("MMMM d, yyyy")</p>
+            <h1 class="text-3xl font-semibold text-white">@Model.Post.Title</h1>
+        </header>
+
+        <div class="prose prose-invert prose-slate max-w-none mt-8 leading-7 text-slate-300
+                    prose-headings:text-white prose-a:text-indigo-500 prose-strong:text-white
+                    prose-code:text-slate-200">
+            @Html.Raw(Model.Post.Body)
+        </div>
+    </article>
+</main>
