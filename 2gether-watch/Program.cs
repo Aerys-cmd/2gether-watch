@@ -1,3 +1,4 @@
+using _2gether_watch.Blog;
 using _2gether_watch.Rooms;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 
@@ -13,6 +14,9 @@ StaticWebAssetsLoader.UseStaticWebAssets(builder.Environment, builder.Configurat
 builder.Services.AddRazorPages();
 
 builder.Services.AddSingleton<RoomManager>();
+
+builder.Services.AddSingleton(_ =>
+    new BlogService(Path.Combine(builder.Environment.ContentRootPath, "Content", "blog")));
 
 builder.Services.AddOptions<SaySiftOptions>()
     .Bind(builder.Configuration.GetSection(SaySiftOptions.SectionName));
@@ -43,6 +47,19 @@ app.MapStaticAssets();
 app.MapRazorPages()
     .WithStaticAssets();
 
+
+app.MapGet("/sitemap.xml", (HttpContext context, BlogService blog) =>
+{
+    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+    var urls = new List<string> { $"{baseUrl}/", $"{baseUrl}/blog" };
+    urls.AddRange(blog.GetAll().Select(p => $"{baseUrl}/blog/{p.Slug}"));
+
+    var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+              "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
+              string.Concat(urls.Select(u => $"  <url><loc>{u}</loc></url>\n")) +
+              "</urlset>";
+    return Results.Text(xml, "application/xml");
+});
 
 app.Map("/ws", async context =>
 {
