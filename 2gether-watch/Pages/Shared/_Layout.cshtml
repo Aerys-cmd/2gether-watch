@@ -1,5 +1,6 @@
 ﻿@using Microsoft.Extensions.Options
 @inject IOptions<FeedbackHubOptions> FeedbackHubOptions
+@inject IOptions<AnalyticsOptions> AnalyticsOptions
 @{
     var title = ViewData["Title"] as string ?? "2gether Watch";
     var bodyClass = ViewData["BodyClass"] as string ?? "min-h-screen bg-slate-950 text-slate-100";
@@ -40,6 +41,16 @@
     };
     </script>
     @await RenderSectionAsync("Head", required: false)
+    @if (AnalyticsOptions.Value.Enabled)
+    {
+        <script async src="https://www.googletagmanager.com/gtag/js?id=@AnalyticsOptions.Value.MeasurementId"></script>
+        <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', '@AnalyticsOptions.Value.MeasurementId');
+        </script>
+    }
 </head>
 
 <body class="@bodyClass">
