@@ -10,6 +10,9 @@ namespace _2gether_watch.Blog;
 /// </summary>
 public sealed class BlogService
 {
+    private static readonly MarkdownPipeline MarkdownPipeline =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+
     private readonly Lazy<List<BlogPost>> _posts;
 
     public BlogService(string contentDirectory)
@@ -65,6 +68,6 @@ public sealed class BlogService
             Keyword: fields.GetValueOrDefault("keyword", ""),
             Date: DateOnly.ParseExact(fields.GetValueOrDefault("date", "1970-01-01"), "yyyy-MM-dd", CultureInfo.InvariantCulture),
             Published: bool.Parse(fields.GetValueOrDefault("published", "false")),
-            Body: Markdown.ToHtml(bodyMarkdown));
+            Body: Markdown.ToHtml(bodyMarkdown, MarkdownPipeline));
     }
 }
