@@ -30,7 +30,8 @@ public class BlogServiceTests : IDisposable
     public void ParsesFrontMatterAndRendersMarkdown()
     {
         WritePost("hello-world", "Hello World", "A test post", "test keyword",
-            "2020-01-01", published: true, body: "# Heading\n\nSome **bold** text.");
+            "2020-01-01", published: true,
+            body: "# Heading\n\nSome **bold** text.\n\n| A | B |\n|---|---|\n| 1 | 2 |");
 
         var post = CreateService().GetBySlug("hello-world");
 
@@ -40,8 +41,9 @@ public class BlogServiceTests : IDisposable
         Assert.Equal("A test post", post.Description);
         Assert.Equal("test keyword", post.Keyword);
         Assert.Equal(new DateOnly(2020, 1, 1), post.Date);
-        Assert.Contains("<h1>Heading</h1>", post.Body);
+        Assert.Contains(">Heading</h1>", post.Body);
         Assert.Contains("<strong>bold</strong>", post.Body);
+        Assert.Contains("<table>", post.Body);
     }
 
     [Fact]
