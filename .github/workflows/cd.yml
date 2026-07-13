@@ -1,4 +1,4 @@
-name: CD – Build, Push & Deploy
+name: CD – Build, Push
 
 on:
   release:
@@ -43,33 +43,9 @@ jobs:
         with:
           context: .
           file: 2gether-watch/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Copy docker-compose.yml to VPS
-        uses: appleboy/scp-action@ff85246acaad7bdce478db94a363cd2bf7c90345 # v1.0.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: docker-compose.yml
-          target: /opt/2gether-watch
-
-      - name: Pull and restart container on VPS
-        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            set -e
-            echo "${{ secrets.GITHUB_TOKEN }}" | \
-              docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-            cd /opt/2gether-watch
-            IMAGE_TAG="${{ github.ref_name }}"
-            export IMAGE_TAG="${IMAGE_TAG#v}"
-            docker compose pull
-            docker compose up -d --remove-orphans
