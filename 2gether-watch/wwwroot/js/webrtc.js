@@ -718,6 +718,20 @@ function setRemoteScreen(peerId, stream) {
     v.classList.remove("hidden");
     hideVideoOverlays(["stagePlaceholder", "ytPlayerContainer", "videoPlayer"]);
     setState({ videoType: "screen" });
+    // The room's video/YouTube player keeps running in the background (hidden, not
+    // paused) so it stays in sync and can resume instantly once the share ends —
+    // mute it so its audio doesn't play under the screen share.
+    setBackgroundVideoMuted(true);
+}
+
+// Mute/unmute whichever "now playing" player (YouTube or html5) is running behind
+// an active screen share, without pausing it.
+function setBackgroundVideoMuted(muted) {
+    if (ytPlayer && ytPlayerReady) {
+        if (muted) ytPlayer.mute(); else ytPlayer.unMute();
+    }
+    const v = document.getElementById("videoPlayer");
+    if (v) v.muted = muted;
 }
 
 function clearRemoteScreen(peerId) {
@@ -752,6 +766,7 @@ function restoreLocalVideo() {
         document.getElementById("stagePlaceholder")?.classList.remove("hidden");
         setState({ videoType: null });
     }
+    setBackgroundVideoMuted(false);
 }
 
 // ── Video sync ────────────────────────────────────────────────────────────────
@@ -828,13 +843,15 @@ function createYTPlayer(videoId) {
         videoId,
         width: "100%",
         height: "100%",
-        playerVars: { autoplay: 1, rel: 0, modestbranding: 1 },
+        playerVars: { autoplay: 1, rel: 0, modestbranding: 1, mute: activeScreenPeer !== null ? 1 : 0 },
         events: { onReady: onYtPlayerReady, onStateChange: onYtStateChange },
     });
 }
 
 function onYtPlayerReady() {
     ytPlayerReady = true;
+    // Reconcile in case screen-share state changed while the player was loading.
+    setBackgroundVideoMuted(activeScreenPeer !== null);
     // Keep ytLoadingFromRemote true for APPLY_SYNC_GUARD_MS so that the initial
     // onStateChange(PLAYING) the IFrame API fires immediately after onReady
     // (due to autoplay:1) is suppressed and does not echo a spurious "play" sync.
@@ -884,6 +901,7 @@ function loadHtml5Video(url) {
     const v = document.getElementById("videoPlayer");
     if (!v) return;
     v.src = safeUrl;
+    v.muted = activeScreenPeer !== null;
     if (activeScreenPeer === null) v.classList.remove("hidden");
     requestMediaPlayback(v);
 
