@@ -21,6 +21,12 @@ const APPLY_SYNC_GUARD_MS    = 600;
 // Delay before pushing our own video state to a newly joined peer, to give
 // their player time to initialise before receiving play/pause commands.
 const SYNC_SHARE_DELAY_MS    = 1200;
+// How often a playing peer broadcasts its current time so others can catch up
+// if they've silently drifted behind (e.g. after a buffering stall).
+const DRIFT_TICK_INTERVAL_MS = 5000;
+// How long to wait after triggering YouTube autoplay before checking whether
+// the browser actually blocked it (unmuted autoplay requires a user gesture).
+const AUTOPLAY_CHECK_DELAY_MS = 1000;
 // Maximum number of unread chat notifications to display in the badge.
 const MAX_UNREAD_BADGE_COUNT = 9;
 // Screen-share RTP encoding parameters.
@@ -39,6 +45,10 @@ function setState(patch) {
 // ── Autoplay recovery (mobile/browser policy) ───────────────────────────────
 const pendingAutoplayEls = new Set();
 let autoplayUnlockBound = false;
+// True when the YouTube IFrame player tried to autoplay (e.g. from a remote
+// "load"/"play" sync) and the browser silently blocked it because there was
+// no local user gesture behind it.
+let ytAutoplayPending = false;
 
 function requestMediaPlayback(el) {
     if (!el) return;
@@ -64,6 +74,10 @@ function bindAutoplayUnlock() {
             } else {
                 pendingAutoplayEls.delete(el);
             }
+        }
+        if (ytAutoplayPending) {
+            ytPlayer?.playVideo?.();
+            ytAutoplayPending = false;
         }
         document.getElementById("autoplayNudge")?.classList.add("hidden");
     };
@@ -808,6 +822,21 @@ function loadVideoUrl(url) {
     wsSend({ type: "sync", action: "load", url });
 }
 
+// Unmuted YouTube autoplay only works with a user gesture behind it. Our own
+// "load"/"play" click qualifies; a play triggered by a remote sync message
+// does not, so the browser silently blocks it. Check shortly after any
+// autoplay attempt and, if it didn't take, surface the existing autoplay
+// nudge so one tap/click resumes it (same recovery path as html5 video/audio).
+function scheduleYtAutoplayCheck() {
+    setTimeout(() => {
+        if (currentVideoType !== "youtube" || !ytPlayer || !ytPlayerReady) return;
+        if (ytPlayer.getPlayerState?.() === YT.PlayerState.PLAYING) return;
+        ytAutoplayPending = true;
+        bindAutoplayUnlock();
+        document.getElementById("autoplayNudge")?.classList.remove("hidden");
+    }, AUTOPLAY_CHECK_DELAY_MS);
+}
+
 function loadYouTube(videoId) {
     // If a remote screen is active, don't hide it — load in background
     if (activeScreenPeer === null) {
@@ -828,6 +857,7 @@ function loadYouTube(videoId) {
     }
     if (ytPlayer) {
         ytPlayer.loadVideoById(videoId);
+        scheduleYtAutoplayCheck();
     } else {
         createYTPlayer(videoId);
     }
@@ -860,6 +890,8 @@ function onYtPlayerReady() {
         const sync = pendingYtSync;
         pendingYtSync = null;
         applyRemoteSync(sync);
+    } else {
+        scheduleYtAutoplayCheck();
     }
 }
 
@@ -927,6 +959,7 @@ function loadHtml5Video(url) {
 }
 
 function applyRemoteSync(msg) {
+    if (msg.action === "tick") { applyDriftTick(msg.time); return; }
     if (msg.action === "load") {
         const url = typeof msg.url === "string" ? msg.url.trim() : "";
         if (!url) return;
@@ -968,6 +1001,7 @@ function applyRemoteSync(msg) {
             if (msg.action === "play") {
                 if (Math.abs(cur - msg.time) > SYNC_TOLERANCE_S) ytPlayer.seekTo(msg.time, true);
                 ytPlayer.playVideo();
+                scheduleYtAutoplayCheck();
             } else if (msg.action === "pause") {
                 if (Math.abs(cur - msg.time) > SYNC_TOLERANCE_S) ytPlayer.seekTo(msg.time, true);
                 ytPlayer.pauseVideo();
@@ -995,6 +1029,42 @@ function applyRemoteSync(msg) {
             // Keep guard active long enough that browser events fired by our own seek/play don't echo
             setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
         }
+    }
+}
+
+// Play/pause/seek only re-sync at the moment someone acts; between those
+// moments each peer's player runs on its own clock and can silently drift
+// (buffering stalls, decode hiccups). A playing peer periodically broadcasts
+// its time via sendDriftTick(); receivers only catch up when they're behind
+// by more than tolerance, and never rewind — so playback converges on
+// whoever is furthest ahead instead of ping-ponging back and forth.
+function applyDriftTick(remoteTime) {
+    if (currentVideoType === "youtube" && ytPlayer && ytPlayerReady) {
+        if (ytPlayer.getPlayerState?.() !== YT.PlayerState.PLAYING) return;
+        const cur = ytPlayer.getCurrentTime?.() ?? 0;
+        if (remoteTime - cur > SYNC_TOLERANCE_S) {
+            isApplyingSync = true;
+            ytPlayer.seekTo(remoteTime, true);
+            setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
+        }
+    } else if (currentVideoType === "html5") {
+        const v = document.getElementById("videoPlayer");
+        if (!v || v.paused) return;
+        if (remoteTime - v.currentTime > SYNC_TOLERANCE_S) {
+            isApplyingSync = true;
+            v.currentTime = remoteTime;
+            setTimeout(() => { isApplyingSync = false; }, APPLY_SYNC_GUARD_MS);
+        }
+    }
+}
+
+function sendDriftTick() {
+    if (currentVideoType === "youtube" && ytPlayer && ytPlayerReady) {
+        if (ytPlayer.getPlayerState?.() === YT.PlayerState.PLAYING)
+            wsSend({ type: "sync", action: "tick", time: ytPlayer.getCurrentTime?.() ?? 0 });
+    } else if (currentVideoType === "html5") {
+        const v = document.getElementById("videoPlayer");
+        if (v && !v.paused) wsSend({ type: "sync", action: "tick", time: v.currentTime });
     }
 }
 
@@ -1110,6 +1180,7 @@ window.onYouTubeIframeAPIReady = function () {
 // ── Bootstrap ─────────────────────────────────────────────────────────────────
 function initWebRTC() {
     wsConnect();
+    setInterval(sendDriftTick, DRIFT_TICK_INTERVAL_MS);
 
     const localLabel = document.getElementById("localLabel");
     if (localLabel) localLabel.textContent = USERNAME;
