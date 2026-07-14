@@ -796,7 +796,11 @@ let pendingYtSync       = null;
 let currentVideoType    = null;
 let currentVideoUrl     = "";
 let isApplyingSync      = false;
-let lastSyncSent        = 0;
+// Last time we sent our own "seek" sync — rate-limits repeated seeks only
+// (e.g. dragging a scrubber). Play/pause are never throttled and must not
+// touch this clock, or an unrelated play/pause event could silently swallow
+// a genuine seek that happens to follow it within SEEK_THROTTLE_MS.
+let lastSeekSent        = 0;
 
 function getYouTubeId(url) {
     const m = url.match(
@@ -903,10 +907,8 @@ function onYtStateChange({ data }) {
     // Play and pause are discrete state changes that must always be relayed —
     // do not throttle them (only continuous events like seek are throttled).
     if (data === YT.PlayerState.PLAYING) {
-        lastSyncSent = Date.now();
         wsSend({ type: "sync", action: "play",  time: t });
     } else if (data === YT.PlayerState.PAUSED) {
-        lastSyncSent = Date.now();
         wsSend({ type: "sync", action: "pause", time: t });
     }
 }
@@ -941,19 +943,17 @@ function loadHtml5Video(url) {
     // that a pause/play is never silently dropped due to a recent seek or load event.
     v.onplay   = () => {
         if (isApplyingSync) return;
-        lastSyncSent = Date.now();
         wsSend({ type: "sync", action: "play",  time: v.currentTime });
     };
     v.onpause  = () => {
         if (isApplyingSync) return;
-        lastSyncSent = Date.now();
         wsSend({ type: "sync", action: "pause", time: v.currentTime });
     };
     v.onseeked = () => {
         if (isApplyingSync) return;
         const now = Date.now();
-        if (now - lastSyncSent < SEEK_THROTTLE_MS) return;
-        lastSyncSent = now;
+        if (now - lastSeekSent < SEEK_THROTTLE_MS) return;
+        lastSeekSent = now;
         wsSend({ type: "sync", action: "seek", time: v.currentTime });
     };
 }
