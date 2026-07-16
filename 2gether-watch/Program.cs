@@ -1,6 +1,7 @@
 using _2gether_watch.Blog;
 using _2gether_watch.Rooms;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
+using Microsoft.AspNetCore.HttpOverrides;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,6 +26,18 @@ builder.Services.AddOptions<AnalyticsOptions>()
     .Bind(builder.Configuration.GetSection(AnalyticsOptions.SectionName));
 
 var app = builder.Build();
+
+// Traefik terminates TLS and forwards over the "web" docker network, so the proxy IP
+// is dynamic — clear KnownNetworks/KnownProxies to trust its X-Forwarded-* headers.
+// Without this, Request.Scheme always reads "http" (Traefik->container hop), which
+// leaked http:// into sitemap.xml, canonical, and OG/Twitter meta tags.
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+};
+forwardedHeadersOptions.KnownIPNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -51,14 +64,22 @@ app.MapRazorPages()
 app.MapGet("/sitemap.xml", (HttpContext context, BlogService blog) =>
 {
     var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
-    var urls = new List<string> { $"{baseUrl}/", $"{baseUrl}/blog" };
-    urls.AddRange(blog.GetAll().Select(p => $"{baseUrl}/blog/{p.Slug}"));
+    var entries = new List<(string Loc, string? LastMod)> { ($"{baseUrl}/", null), ($"{baseUrl}/blog", null) };
+    entries.AddRange(blog.GetAll().Select(p => ($"{baseUrl}/blog/{p.Slug}", (string?)p.Date.ToString("yyyy-MM-dd"))));
 
     var xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
               "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n" +
-              string.Concat(urls.Select(u => $"  <url><loc>{u}</loc></url>\n")) +
+              string.Concat(entries.Select(e => e.LastMod is null
+                  ? $"  <url><loc>{e.Loc}</loc></url>\n"
+                  : $"  <url><loc>{e.Loc}</loc><lastmod>{e.LastMod}</lastmod></url>\n")) +
               "</urlset>";
     return Results.Text(xml, "application/xml");
+});
+
+app.MapGet("/robots.txt", (HttpContext context) =>
+{
+    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+    return Results.Text($"User-agent: *\nAllow: /\n\nSitemap: {baseUrl}/sitemap.xml\n", "text/plain");
 });
 
 app.Map("/ws", async context =>
