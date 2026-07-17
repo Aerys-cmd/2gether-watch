@@ -5,6 +5,7 @@
     var title = ViewData["Title"] as string ?? "2gether Watch";
     var bodyClass = ViewData["BodyClass"] as string ?? "min-h-screen bg-slate-950 text-slate-100";
     var viewport = ViewData["Viewport"] as string ?? "width=device-width, initial-scale=1.0";
+    var baseUrl = $"{Context.Request.Scheme}://{Context.Request.Host}";
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -39,6 +40,23 @@
             },
         },
     };
+    </script>
+    <script type="application/ld+json">
+    {
+      "@@context": "https://schema.org",
+      "@@type": "Organization",
+      "name": "2gether Watch",
+      "url": "@baseUrl",
+      "logo": "@baseUrl/logo.svg"
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+      "@@context": "https://schema.org",
+      "@@type": "WebSite",
+      "name": "2gether Watch",
+      "url": "@baseUrl"
+    }
     </script>
     @await RenderSectionAsync("Head", required: false)
     @if (AnalyticsOptions.Value.Enabled)

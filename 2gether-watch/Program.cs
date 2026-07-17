@@ -27,13 +27,16 @@ builder.Services.AddOptions<AnalyticsOptions>()
 
 var app = builder.Build();
 
-// Traefik terminates TLS and forwards over the "web" docker network, so the proxy IP
-// is dynamic — clear KnownNetworks/KnownProxies to trust its X-Forwarded-* headers.
-// Without this, Request.Scheme always reads "http" (Traefik->container hop), which
-// leaked http:// into sitemap.xml, canonical, and OG/Twitter meta tags.
+// Traffic flows Cloudflare -> Traefik -> app (two+ proxy hops). KnownNetworks/KnownProxies
+// are already cleared below (trust the whole chain), so cap ForwardLimit at a fixed hop
+// count buys no extra security and just re-breaks if a hop is ever added — leave it
+// unlimited. This fixes canonical/og/sitemap URL scheme; it does not force any redirect,
+// so if X-Forwarded-Proto ever arrives in an unexpected shape the worst case is URLs
+// stay http, same as before this change — never a redirect loop.
 var forwardedHeadersOptions = new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    ForwardLimit = null,
 };
 forwardedHeadersOptions.KnownIPNetworks.Clear();
 forwardedHeadersOptions.KnownProxies.Clear();
@@ -47,7 +50,23 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// HTTP->HTTPS redirect is handled at the Cloudflare edge ("Always Use HTTPS"), not here.
+// Kestrel only binds http://+:8080 (TLS terminates upstream), so an app-layer
+// UseHttpsRedirection() has no real https port to target — and if Request.Scheme ever
+// fails to resolve to "https" for a genuinely-https request, redirecting here would
+// 307-loop every page load and the /ws WebSocket upgrade. The edge redirect keys off the
+// client's actual connection scheme, so it can't loop.
+
+app.Use(async (context, next) =>
+{
+    var headers = context.Response.Headers;
+    headers.XContentTypeOptions = "nosniff";
+    headers.XFrameOptions = "DENY";
+    headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    // Rooms use camera/mic/screen-share themselves (same-origin) but must not grant it to embedders.
+    headers["Permissions-Policy"] = "camera=(self), microphone=(self), display-capture=(self)";
+    await next();
+});
 
 app.UseWebSockets();
 
@@ -80,6 +99,24 @@ app.MapGet("/robots.txt", (HttpContext context) =>
 {
     var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
     return Results.Text($"User-agent: *\nAllow: /\n\nSitemap: {baseUrl}/sitemap.xml\n", "text/plain");
+});
+
+app.MapGet("/llms.txt", (HttpContext context, BlogService blog) =>
+{
+    var baseUrl = $"{context.Request.Scheme}://{context.Request.Host}";
+    var text = $"""
+        # 2gether Watch
+
+        > Free browser-based watch party app. Sync YouTube or direct video URLs across
+        > up to 10 peers with no sign-up, plus optional audio/video calls, live chat, and
+        > screen sharing, powered by WebRTC.
+
+        - [Home]({baseUrl}/): Create or join a room
+        - [Blog]({baseUrl}/blog): Guides and comparisons
+        {string.Join('\n', blog.GetAll().Select(p => $"- [{p.Title}]({baseUrl}/blog/{p.Slug}): {p.Description}"))}
+        - [Privacy]({baseUrl}/Privacy): Privacy policy
+        """;
+    return Results.Text(text, "text/plain");
 });
 
 app.Map("/ws", async context =>

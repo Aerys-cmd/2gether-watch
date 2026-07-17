@@ -1,6 +1,6 @@
 ---
 title: Teleparty Alternative With Video Chat and Screen Share
-description: Teleparty (formerly Netflix Party) has no calls or screen share and only works on supported streaming platforms. Here's a browser-based alternative that adds both.
+description: Teleparty (formerly Netflix Party) has no calls or screen share and only works on supported platforms. Here's a browser-based alternative that adds both.
 keyword: teleparty alternative
 date: 2026-07-14
 published: true
