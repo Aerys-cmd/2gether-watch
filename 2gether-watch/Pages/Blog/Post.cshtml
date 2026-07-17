@@ -1,7 +1,7 @@
 @page "/blog/{slug}"
 @model _2gether_watch.Pages.Blog.PostModel
 @{
-    ViewData["Title"] = $"{Model.Post.Title} - 2gether Watch Blog";
+    ViewData["Title"] = Model.Post.Title;
     ViewData["BodyClass"] = "min-h-screen bg-slate-950 text-slate-100";
 }
 

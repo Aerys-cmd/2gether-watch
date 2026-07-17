@@ -1,5 +1,5 @@
 ---
-title: 2gether Watch Is Open Source — Why That Matters for a Watch Party App
+title: 2gether Watch Is Open Source — Why That Matters
 description: Why an open-source, MIT-licensed watch party app is a different trust model than the closed-source SaaS tools most people default to.
 keyword: open source watch party app
 date: 2026-08-04
